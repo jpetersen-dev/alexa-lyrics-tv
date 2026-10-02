@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.tokens.json
+spotify_tokens.json
+lyrics_cache.db
+*.log
+.DS_Store
+.pytest_cache/

@@ -1,0 +1,58 @@
+{
+  "project_name": "ALEXA LYRICS TV",
+  "version": "0.2.0",
+  "last_updated": "2026-10-01T23:05:00-03:00",
+  "current_phase": "FASE 1.5 — CONSTRUCCIÓN INDEPENDIENTE DEL SYNC ENGINE",
+  "status": "SYNC_ENGINE_VALIDATED",
+  "workspace_path": "d:\\Projects (Local)\\alexa-lyrics-tv",
+  "scratch_junction": "C:\\Users\\peter\\.gemini\\antigravity\\scratch\\alexa-lyrics-tv",
+  "environment": {
+    "os": "Windows 11",
+    "local_ip": "192.168.1.88",
+    "python_version": "3.14.5",
+    "node_version": "24.14.1",
+    "npm_version": "11.11.0",
+    "docker_installed": false,
+    "ask_cli_version": "2.30.7",
+    "alexa_mcp_status": "AUTHENTICATED"
+  },
+  "subsystems": {
+    "sync_engine": {
+      "status": "VALIDATED",
+      "modules": {
+        "clock": "src.playback_clock.PlaybackClock (Interpolación monotónica + tolerancia a seek)",
+        "mock_provider": "src.mock_provider.MockPlaybackProvider (Simulador determinista)",
+        "lrc_parser": "src.lrc_parser (parse_lrc con soporte centésimas/milésimas/tags + get_active_line determinista)",
+        "lyrics_engine": "src.lrclib_provider.LRCLIBLyricsProvider (API LRCLIB + caché SQLite)",
+        "engine": "src.sync_engine.SyncEngine (Orquestador desacoplado de eventos)",
+        "output_contract": "src.sync_models.SyncedPlaybackState (Payload canónico para Cast CAF v3)"
+      },
+      "tests_passed": "27/27 (100% pasando en tests/)"
+    },
+    "SPOTIFY_POLICY_COMPATIBILITY": {
+      "status": "UNRESOLVED",
+      "policy_clause": "Do not synchronize Spotify content. You may not synchronize any sound recordings with any visual media, including any advertising, film, television program, slideshow, video, or similar content.",
+      "risk_level": "CRÍTICO / ALTO",
+      "note": "El núcleo del sistema ahora es 100% independiente de Spotify. Spotify es solo un PlaybackProvider opcional."
+    },
+    "lyrics_engine": {
+      "provider": "LRCLIB API (https://lrclib.net)",
+      "cache_db": "lyrics_cache.db (SQLite)",
+      "connectivity_test": "PASSED (Queen - Bohemian Rhapsody probado en vivo y verificado en caché)"
+    },
+    "receiver_cast": {
+      "technology": "Google Cast Custom Web Receiver (CAF v3)",
+      "target_hardware": "Google Chromecast (HDMI en TV no Smart)",
+      "hosting_target": "Vercel (Free tier, HTTPS SSL obligatorio)",
+      "custom_message_namespace": "urn:x-cast:com.alexalyricstv.sync",
+      "input_payload": "SyncedPlaybackState"
+    }
+  },
+  "blockers": [
+    "SPOTIFY_POLICY_COMPATIBILITY se mantiene como UNRESOLVED para preservar la independencia jurídica."
+  ],
+  "next_actions": [
+    "Fase 4: Diseñar y prototipar la interfaz web minimalista TV (React/HTML5) consumiendo SyncedPlaybackState en navegador local",
+    "Fase 5: Empaquetar la interfaz como Custom Web Receiver (CAF v3) para Google Cast"
+  ]
+}
