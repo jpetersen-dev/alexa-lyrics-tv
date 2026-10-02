@@ -9,3 +9,5 @@ lyrics_cache.db
 *.log
 .DS_Store
 .pytest_cache/
+node_modules/
+web/dist/

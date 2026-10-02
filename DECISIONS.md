@@ -93,3 +93,34 @@ Para evitar que el bloqueo de políticas de Spotify detenga el proyecto, se deci
    - Estructura pura que desacopla el reproductor y las letras del Cast Web Receiver:
      `{ track, artist, duration_ms, position_ms, is_playing, lyrics_status, lyrics_lines, active_line_index, active_line_text, next_line_text, reference_timestamp_ms }`
    - El Chromecast no tiene conocimiento alguno de Spotify, Alexa ni LRCLIB.
+
+---
+
+## ADR 008: Servidor de Transporte en Tiempo Real (FastAPI + WebSockets) y Visor Web Local (React 19 + TypeScript + Vite)
+
+### Contexto
+Para validar visualmente el comportamiento del motor de sincronización antes de integrar Google Cast (CAF v3) y resolver credenciales de Spotify, era necesario implementar un canal de transporte en tiempo real y una interfaz web local optimizada para TV.
+
+### Decisión
+1. **Transporte Backend con FastAPI + WebSockets (`src/server.py`)**:
+   - Implementar un servidor asíncrono con `FastAPI` y `websockets`.
+   - Canal WebSocket `/ws/playback` con política **Zero Network Spam**:
+     - Envío inmediato del estado actual al conectar un nuevo cliente.
+     - Emisión reactiva únicamente ante cambios de estado (`is_playing`, `track`) o transición de verso (`active_line_index`).
+     - Pulso de sincronización de seguridad cada 3 segundos (`reference_timestamp_ms` + `position_ms`) para corregir cualquier deriva acumulada.
+   - Bucle de fondo no bloqueante (`asyncio.sleep(0.150)`) ejecutado durante el ciclo de vida del servidor (`lifespan`).
+   - Endpoints REST `/api/mock/*` para control determinista del reproductor y `/api/status` para telemetría.
+   - Montaje estático de `web/dist` en la raíz `/` para operar en un único puerto (`8000`) sin proxies inversos en producción local.
+
+2. **Visor Web React 19 + TypeScript + Vite (`web/`)**:
+   - **Interpolación Cliente a 60 fps (`useSyncedLyrics`)**:
+     - El cliente calcula la posición continua usando `requestAnimationFrame` y deltas de tiempo local con `performance.now()`.
+     - Resolución de verso activo en cliente mediante búsqueda binaria rápida sobre `lyrics_lines`.
+     - Cero dependencia de transmisiones de red a 60 fps, minimizando uso de CPU y ancho de banda en dispositivos ligeros como Chromecast.
+   - **Diseño de Interfaz TV (`KaraokeView`)**:
+     - Modo oscuro de alto contraste con fondo `#08080a` y tarjetas de vidrio translúcido (*glassmorphic*).
+     - Tipografía masiva de 48px+ con sombras brillantes luminiscentes para legibilidad a 3 metros.
+     - Auto-scroll vertical centrado suave utilizando `scrollIntoView({ behavior: 'smooth', block: 'center' })`.
+     - Pantalla ambiental con reloj digital grande cuando la reproducción está en pausa o detenida.
+     - Panel de diagnóstico flotante (`DiagnosticPanel`) colapsable para pruebas de campo e inspección de LRCLIB en vivo.
+

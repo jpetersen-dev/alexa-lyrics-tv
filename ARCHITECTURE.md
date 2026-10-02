@@ -177,11 +177,35 @@ La documentación oficial de Spotify Web API contiene la siguiente prohibición 
 - **Cierre automático (Auto-sleep)**:
   - Si transcurren más de 3 minutos en estado `PAUSED` o `IDLE`, el backend libera la sesión de Cast para que el televisor vuelva a su protector de pantalla ambiental o modo reposo.
 
+### 4.5. Servidor de Transporte (FastAPI + WebSockets) y Visor Web Local (React + Vite)
+- **Servidor Asíncrono (`src/server.py`)**:
+  - FastAPI gestiona el ciclo de vida del `SyncEngine` mediante el gestor de contexto `lifespan`.
+  - Un bucle de sincronización en segundo plano (`background_sync_loop`) evalúa el estado del reproductor cada 150 ms sin bloquear el hilo principal.
+  - **Canal WebSocket `/ws/playback`**:
+    - Conexión inicial: Entrega inmediata del `SyncedPlaybackState` completo.
+    - Política de emisión reactiva (Zero Network Spam):
+      1. Transición de estado de reproducción (`is_playing` cambia).
+      2. Cambio de pista (`track` cambia).
+      3. Transición de verso activo (`active_line_index` cambia).
+      4. Pulso de anclaje periódico cada 3 segundos (`reference_timestamp_ms` + `position_ms`).
+  - **Endpoints de Control y Diagnóstico**:
+    - `GET /api/status`: Estado del motor, clientes conectados y última sincronización.
+    - `POST /api/mock/play`, `pause`, `resume`, `seek`, `next`, `load`: Control determinista para desarrollo y pruebas.
+  - **Distribución Estática Unificada**:
+    - Montaje estático de `web/dist` en la raíz `/` de FastAPI, permitiendo servir la interfaz y los WebSockets desde un único puerto (8000).
+
+- **Visor Web React 19 (`web/`)**:
+  - `useSyncedLyrics`: Hook personalizado que gestiona el WebSocket, la reconexión exponencial y el cálculo local continuo a 60 fps mediante `requestAnimationFrame` y `performance.now()`.
+  - `KaraokeView`: Componente de pantalla completa optimizado para televisores con tipografía masiva (48px+), efectos de brillo/glow sobre la línea cantada, desplazamiento vertical continuo centrado y modo ambiental de reloj cuando está en pausa.
+  - `DiagnosticPanel`: Barra de control flotante que permite disparar cambios de estado en el backend e inspeccionar letras en vivo contra LRCLIB.
+
 ---
 
 ## 5. Decisiones Técnicas Fundamentales
 
-1. **Lenguaje Backend**: **Python 3.14** con `pychromecast` y `FastAPI`.
-   - `pychromecast` es el estándar de oro en la industria de código abierto para control de Cast local (utilizado directamente por Home Assistant).
-2. **Frontend Receiver**: Web estática moderna optimizada para pantallas 1080p/4K, alojada en Vercel con HTTPS.
+1. **Lenguaje Backend**: **Python 3.14** con `pychromecast`, `FastAPI` y `websockets`.
+   - `pychromecast` para control de Cast local (puerto 8009 TLS).
+   - `FastAPI` para APIs de desarrollo, WebSockets de baja latencia y servicio de la SPA.
+2. **Frontend Receiver / Visor**: React 19 + TypeScript + Vite, optimizado para televisores 1080p/4K, convertible a Cast Custom Web Receiver (CAF v3) y desplegable en Vercel con HTTPS.
 3. **Manejo de Secretos**: Ningún token o secreto se transmite jamás al Chromecast ni se expone en el código cliente.
+

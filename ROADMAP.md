@@ -107,69 +107,38 @@
 
 ---
 
-- **Objetivo**: Crear un módulo independiente que reciba artista + canción, consulte LRCLIB, normalice títulos, maneje errores y almacene en caché local.
+## 📌 Fase 2 — Servidor de Transporte (FastAPI + WebSockets) y Visor Web Local (React + Vite)
+
+- **Objetivo**: Construir la capa de transporte en tiempo real y el visor web local para validar visualmente la experiencia de karaoke antes de abordar la integración con Google Cast.
 - **Tareas**:
-  - [ ] Crear el módulo normalizador de títulos (`clean_track_title`).
-  - [ ] Implementar cliente HTTP asíncrono para LRCLIB con timeouts y reintentos.
-  - [ ] Implementar el parser de formato LRC a estructuras numéricas `{ time_ms, text }`.
-  - [ ] Diseñar la base de datos SQLite para caché persistente de letras.
-  - [ ] Manejar casos de canciones sin letra sincronizada (fallback a letra estática o aviso en UI).
+  - [x] Registrar formalmente `pytest`, `pytest-asyncio`, `httpx` en `requirements.txt` y `requirements-dev.txt`.
+  - [x] Implementar servidor backend FastAPI (`src/server.py`) con lifespan async y bucle de fondo a 150ms.
+  - [x] Implementar canal WebSocket `/ws/playback` con política Zero Network Spam: estado inicial inmediato + emisiones reactivas ante cambio de verso/estado + pulso de sincronización cada 3 segundos.
+  - [x] Implementar endpoints REST `/api/mock/*` (`play`, `pause`, `resume`, `seek`, `next`, `load`) para el arnés de diagnóstico.
+  - [x] Servir la aplicación web estática de producción (`web/dist`) directamente desde la raíz (`/`) de FastAPI.
+  - [x] Desarrollar visor SPA en React 19 + TypeScript + Vite (`web/`) con tipado estricto (`SyncedPlaybackState`, `LyricLine`).
+  - [x] Implementar hook `useSyncedLyrics` con auto-reconexión, reloj interpolador local a 60 fps (`performance.now()`) y resolución binaria de versos.
+  - [x] Construir componente `KaraokeView` optimizado para TV: tipografía grande (48px+ con glow), auto-scroll vertical suave centrado, atenuación progresiva de versos pasados/futuros y pantalla ambiental con reloj al pausar.
+  - [x] Construir `DiagnosticPanel` flotante para pruebas interactivas (controles de mock playback + buscador en vivo de canciones en LRCLIB).
+  - [x] Construir suite de tests unitarios e integración en `tests/test_server.py`.
 - **Criterios de Aceptación**:
-  - Canción conocida devuelve array ordenado por `time_ms`.
-  - Canciones con títulos complejos (ej. `Song - Remastered 2011`) se limpian y resuelven correctamente.
-  - Consulta repetida se resuelve desde la base de datos local en menos de 5 ms.
-- **Pruebas**:
-  - Suite de tests unitarios con 10 canciones de prueba variadas (con letra sincronizada, solo instrumental, y sin letra).
+  - WebSocket entrega `SyncedPlaybackState` de inmediato al conectar.
+  - Interpolación continua a 60 fps en cliente sin tirones visuales.
+  - Auto-scroll suave mantiene el verso activo visible en el tercio central de la pantalla.
+  - Suite de pruebas completa (30 tests) pasando exitosamente al 100%.
+- **Pruebas Realizadas**:
+  - `tests/test_server.py`: Verificación de `/api/status`, endpoints mock `/api/mock/play` y conexión WebSocket inicial.
+  - Compilación de producción en Vite (`npm run build`) limpia y sin errores de tipado.
+  - FastAPI sirviendo `GET /` devolviendo el `index.html` con status 200.
 - **Evidencia**:
-  - Reporte de tests con tiempos de respuesta de caché vs red.
-- **Riesgos**:
-  - Rate limiting de LRCLIB; mitigado con la caché SQLite local.
+  - `pytest -v`: **30 passed in 2.91s** en `tests/`.
+  - Servidor FastAPI montando `web/dist` verificado localmente.
+- **Riesgos Mitigados**:
+  - Validación completa del visor de TV en navegador local antes de lidiar con las complejidades de depuración de Google Cast y Vercel.
 
 ---
 
-## 📌 Fase 3 — Motor de Sincronización Temporal
-
-- **Objetivo**: Diseñar y verificar el algoritmo matemático de interpolación temporal para garantizar visualización sincronizada sin saturar la red.
-- **Tareas**:
-  - [ ] Implementar generador de paquetes `SYNC_PULSE` con `reference_timestamp`.
-  - [ ] Desarrollar la función de cálculo de posición local del cliente (`requestAnimationFrame` math).
-  - [ ] Implementar algoritmo de suavizado (LERP) para transiciones sin saltos bruscos.
-  - [ ] Medir el error práctico (drift) entre el tiempo real del audio y el tiempo calculado.
-- **Criterios de Aceptación**:
-  - Desfase visual medido inferior a 1 segundo en todo momento.
-  - Comportamiento consistente ante pausas y saltos de posición (seek).
-- **Pruebas**:
-  - Simulación de playback de 3 minutos midiendo deriva temporal acumulada.
-- **Evidencia**:
-  - Gráfico o métrica registrada de deriva milisegundo a milisegundo.
-- **Riesgos**:
-  - Desincronización del reloj del sistema entre emisor y receptor; mitigado calculando deltas locales.
-
----
-
-## 📌 Fase 4 — Interfaz Local para TV (Web/React)
-
-- **Objetivo**: Construir la interfaz de usuario de pantalla completa, optimizada exclusivamente para pantallas de TV a 1080p y 4K.
-- **Tareas**:
-  - [ ] Configurar layout oscuro minimalista con alto contraste (estilo karaoke ambiental).
-  - [ ] Implementar tipografía legible a 3 metros de distancia (fuente destacada, 48px+).
-  - [ ] Desarrollar scroll vertical automático centrado en la línea activa.
-  - [ ] Agregar animaciones suaves de transición entre versos.
-  - [ ] Diseñar estados de espera: Inactivo / Buscando letra / Canción instrumental / Pausado.
-  - [ ] Validar funcionamiento completo en navegador antes de conectar con Cast.
-- **Criterios de Aceptación**:
-  - Visualización impecable en resolución 1920x1080.
-  - La línea actual resalta con brillo/color distintivo y scroll sin tirones (60 fps).
-- **Pruebas**:
-  - Ejecución en navegador local simulando diferentes canciones y cambios de ritmo.
-- **Evidencia**:
-  - Capturas de pantalla y test interactivo en navegador.
-- **Riesgos**:
-  - Rendimiento gráfico en el hardware limitado del Chromecast; mitigado utilizando CSS puro (`transform: translateY` acelerado por GPU).
-
----
-
-## 📌 Fase 5 — Integración de Google Cast (Custom Web Receiver)
+## 📌 Fase 3 — Integración de Google Cast (Custom Web Receiver)
 
 - **Objetivo**: Convertir la interfaz en un Cast Custom Web Receiver funcional compatible con el SDK v3 de Google Cast.
 - **Tareas**:
@@ -177,7 +146,7 @@
   - [ ] Configurar el Custom Message Bus con namespace `urn:x-cast:com.alexalyricstv.sync`.
   - [ ] Configurar despliegue en Vercel con HTTPS.
   - [ ] Registrar la aplicación en Google Cast Developer Console o configurar modo desarrollo.
-  - [ ] Probar recepción de mensajes desde emisor de prueba.
+  - [ ] Probar recepción de mensajes desde emisor de prueba (`pychromecast`).
 - **Criterios de Aceptación**:
   - El Receiver carga en el Chromecast real y responde a mensajes JSON enviados por el canal Cast.
 - **Pruebas**:
@@ -189,7 +158,7 @@
 
 ---
 
-## 📌 Fase 6 — Integración End-to-End
+## 📌 Fase 4 — Integración End-to-End
 
 - **Objetivo**: Conectar todos los bloques: Detección en Alexa -> LRCLIB -> Motor de Sync -> Emisor Cast -> TV.
 - **Tareas**:
@@ -208,7 +177,7 @@
 
 ---
 
-## 📌 Fase 7 — Automatización Completa y Ciclo de Vida
+## 📌 Fase 5 — Automatización Completa y Ciclo de Vida
 
 - **Objetivo**: Lograr que el sistema no requiera ninguna intervención manual para operar en el día a día.
 - **Tareas**:
@@ -227,7 +196,7 @@
 
 ---
 
-## 📌 Fase 8 — Robustez y Recuperación ante Fallos
+## 📌 Fase 6 — Robustez y Recuperación ante Fallos
 
 - **Objetivo**: Garantizar que el sistema tolere cortes de red, canciones sin letra, apagado del Chromecast y desconexiones de Alexa.
 - **Tareas**:
@@ -246,7 +215,7 @@
 
 ---
 
-## 📌 Fase 9 — Despliegue y Operación Continua
+## 📌 Fase 7 — Despliegue y Operación Continua
 
 - **Objetivo**: Dejar el Receiver desplegado en producción (Vercel) y el daemon local configurado como servicio de fondo en Windows.
 - **Tareas**:
@@ -262,3 +231,4 @@
   - URL de Vercel activa y servicio Windows funcionando.
 - **Riesgos**:
   - Cambios de IP en la red local; mitigado con descubrimiento por mDNS.
+

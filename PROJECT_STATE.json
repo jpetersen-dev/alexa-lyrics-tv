@@ -1,9 +1,9 @@
 {
   "project_name": "ALEXA LYRICS TV",
-  "version": "0.2.0",
-  "last_updated": "2026-10-01T23:05:00-03:00",
-  "current_phase": "FASE 1.5 — CONSTRUCCIÓN INDEPENDIENTE DEL SYNC ENGINE",
-  "status": "SYNC_ENGINE_VALIDATED",
+  "version": "0.3.0",
+  "last_updated": "2026-10-01T23:40:00-03:00",
+  "current_phase": "FASE 2 — SERVIDOR DE TRANSPORTE (FASTAPI + WEBSOCKETS) Y VISOR WEB LOCAL (REACT + VITE)",
+  "status": "PHASE_2_VALIDATED",
   "workspace_path": "d:\\Projects (Local)\\alexa-lyrics-tv",
   "scratch_junction": "C:\\Users\\peter\\.gemini\\antigravity\\scratch\\alexa-lyrics-tv",
   "environment": {
@@ -27,13 +27,30 @@
         "engine": "src.sync_engine.SyncEngine (Orquestador desacoplado de eventos)",
         "output_contract": "src.sync_models.SyncedPlaybackState (Payload canónico para Cast CAF v3)"
       },
-      "tests_passed": "27/27 (100% pasando en tests/)"
+      "tests_passed": "27/27"
+    },
+    "transport_layer": {
+      "status": "VALIDATED",
+      "server": "src.server (FastAPI + WebSockets + Uvicorn)",
+      "endpoint_ws": "/ws/playback (Zero network spam: instant on connect, on line/state change, 3s sync pulse)",
+      "endpoints_rest": "/api/status, /api/mock/play, /api/mock/pause, /api/mock/resume, /api/mock/seek, /api/mock/next, /api/mock/load",
+      "background_loop_interval_ms": 150,
+      "static_mount": "web/dist montado en /",
+      "tests_passed": "3/3 (tests/test_server.py)"
+    },
+    "web_viewer": {
+      "status": "VALIDATED",
+      "framework": "React 19 + TypeScript + Vite",
+      "client_clock": "useSyncedLyrics (requestAnimationFrame 60 fps + performance.now() local interpolation)",
+      "tv_ui": "KaraokeView (Tipografía 48px+ con glow, auto-scroll vertical suave centrado, ambient clock en pausa)",
+      "diagnostic_tool": "DiagnosticPanel (Controles de reproducción mock + buscador LRCLIB en vivo)",
+      "build_status": "npm run build exitoso (dist/ generado)"
     },
     "SPOTIFY_POLICY_COMPATIBILITY": {
       "status": "UNRESOLVED",
       "policy_clause": "Do not synchronize Spotify content. You may not synchronize any sound recordings with any visual media, including any advertising, film, television program, slideshow, video, or similar content.",
       "risk_level": "CRÍTICO / ALTO",
-      "note": "El núcleo del sistema ahora es 100% independiente de Spotify. Spotify es solo un PlaybackProvider opcional."
+      "note": "El núcleo del sistema y el visor web son 100% independientes de Spotify. Spotify es solo un PlaybackProvider opcional."
     },
     "lyrics_engine": {
       "provider": "LRCLIB API (https://lrclib.net)",
@@ -52,7 +69,6 @@
     "SPOTIFY_POLICY_COMPATIBILITY se mantiene como UNRESOLVED para preservar la independencia jurídica."
   ],
   "next_actions": [
-    "Fase 4: Diseñar y prototipar la interfaz web minimalista TV (React/HTML5) consumiendo SyncedPlaybackState en navegador local",
-    "Fase 5: Empaquetar la interfaz como Custom Web Receiver (CAF v3) para Google Cast"
+    "Fase 3: Integración de Google Cast (Custom Web Receiver con CAF v3 en web/ e integración de pychromecast en backend)"
   ]
 }
