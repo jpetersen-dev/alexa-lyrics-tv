@@ -9,6 +9,7 @@ export const App: React.FC = () => {
     interpolatedPositionMs,
     activeLineIndex,
     isConnected,
+    isCastMode,
     serverUrl,
   } = useSyncedLyrics();
 
@@ -39,6 +40,7 @@ export const App: React.FC = () => {
         positionMs={interpolatedPositionMs}
         activeLineIndex={activeLineIndex}
         isConnected={isConnected}
+        isCastMode={isCastMode}
         serverUrl={serverUrl}
       />
     </div>

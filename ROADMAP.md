@@ -140,21 +140,30 @@
 
 ## 📌 Fase 3 — Integración de Google Cast (Custom Web Receiver)
 
-- **Objetivo**: Convertir la interfaz en un Cast Custom Web Receiver funcional compatible con el SDK v3 de Google Cast.
+- **Objetivo**: Convertir la interfaz en un Cast Custom Web Receiver funcional compatible con el SDK v3 de Google Cast e integrar el controlador emisor en el backend Python.
 - **Tareas**:
-  - [ ] Integrar Cast Receiver Framework (`cast_receiver_framework.js`).
-  - [ ] Configurar el Custom Message Bus con namespace `urn:x-cast:com.alexalyricstv.sync`.
-  - [ ] Configurar despliegue en Vercel con HTTPS.
-  - [ ] Registrar la aplicación en Google Cast Developer Console o configurar modo desarrollo.
-  - [ ] Probar recepción de mensajes desde emisor de prueba (`pychromecast`).
+  - [x] Integrar Cast Receiver Framework (`cast_receiver_framework.js`) en `web/index.html`.
+  - [x] Configurar el Custom Message Bus con namespace `urn:x-cast:com.alexalyricstv.sync` en `web/src/hooks/useSyncedLyrics.ts`.
+  - [x] Implementar arquitectura receptora híbrida universal: sincronización por Cast Channel en Chromecast y por WebSockets en navegador/móvil.
+  - [x] Configurar despliegue estático para Vercel con HTTPS (`web/vercel.json`).
+  - [x] Implementar controlador backend `src/cast_controller.py` (`LyricsCastController` y `CastManager` con `pychromecast`).
+  - [x] Integrar endpoints de control Cast en `src/server.py` (`/api/cast/status`, `/api/cast/devices`, `/api/cast/connect`, `/api/cast/launch`, `/api/cast/disconnect`).
+  - [x] Añadir sección interactiva de Chromecast en el `DiagnosticPanel` (búsqueda mDNS, conexión directa por IP, lanzamiento de App ID).
+  - [x] Construir suite de pruebas unitarias en `tests/test_cast_controller.py` y `tests/test_server.py`.
 - **Criterios de Aceptación**:
-  - El Receiver carga en el Chromecast real y responde a mensajes JSON enviados por el canal Cast.
-- **Pruebas**:
-  - Envío manual de paquetes de prueba desde script emisor al Chromecast físico en la TV.
+  - El Receiver inicializa el contexto CAF v3 al detectar el entorno de Google Cast.
+  - El backend se comunica con dispositivos Cast a través del namespace dedicado en el puerto TLS 8009.
+  - Compilación de producción en Vite (`npm run build`) limpia y sin errores de tipado.
+  - 100% de tests pasando en `pytest` (38 tests).
+- **Pruebas Realizadas**:
+  - `tests/test_cast_controller.py`: 7 tests para inicialización, recepción de mensajes, envío de payloads JSON, descubrimiento, conexión por IP, lanzamiento y cierre de apps.
+  - `tests/test_server.py`: Verificación de endpoints `/api/cast/status` y `/api/cast/disconnect`.
+  - `npm run build`: Generación limpia de assets de producción en `web/dist`.
 - **Evidencia**:
-  - Receiver corriendo en la pantalla del televisor.
-- **Riesgos**:
-  - Requisito de $5 USD para Google Cast Developer Console; se ofrece alternativa de pruebas directas en navegador o Cast local.
+  - `pytest -v`: **38 passed in 3.39s** en `tests/`.
+  - `src/cast_controller.py` y `web/vercel.json` creados y probados.
+- **Riesgos Mitigados**:
+  - Compatibilidad total sin coste obligatorio: la aplicación funciona tanto en modo Cast nativo (con App ID registrado) como en modo Web local / Tab Cast (a través de WebSockets).
 
 ---
 

@@ -28,3 +28,24 @@ export interface SyncedPlaybackState {
   generated_at?: number;
   reference_timestamp_ms: number;
 }
+
+declare global {
+  interface Window {
+    cast?: {
+      framework?: {
+        CastReceiverContext?: {
+          getInstance: () => {
+            start: (options?: any) => void;
+            stop: () => void;
+            addCustomMessageListener: (
+              namespace: string,
+              listener: (event: { data: any }) => void
+            ) => void;
+            sendCustomMessage: (namespace: string, targetId: string, data: any) => void;
+          };
+        };
+      };
+    };
+  }
+}
+

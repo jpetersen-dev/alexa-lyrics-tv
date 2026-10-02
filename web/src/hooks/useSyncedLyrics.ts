@@ -6,8 +6,11 @@ interface UseSyncedLyricsResult {
   interpolatedPositionMs: number;
   activeLineIndex: number;
   isConnected: boolean;
+  isCastMode: boolean;
   serverUrl: string;
 }
+
+const CAST_NAMESPACE = 'urn:x-cast:com.alexalyricstv.sync';
 
 function findActiveLineIndex(positionMs: number, lines: LyricLine[]): number {
   if (!lines || lines.length === 0) return -1;
@@ -32,6 +35,7 @@ function findActiveLineIndex(positionMs: number, lines: LyricLine[]): number {
 export function useSyncedLyrics(): UseSyncedLyricsResult {
   const [state, setState] = useState<SyncedPlaybackState | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isCastMode, setIsCastMode] = useState<boolean>(false);
   const [interpolatedPositionMs, setInterpolatedPositionMs] = useState<number>(0);
   const [activeLineIndex, setActiveLineIndex] = useState<number>(-1);
 
@@ -42,7 +46,56 @@ export function useSyncedLyrics(): UseSyncedLyricsResult {
   const durationMsRef = useRef<number>(0);
   const linesRef = useRef<LyricLine[]>([]);
 
-  // Determinar URL de WebSocket
+  // Función unificada para procesar el estado entrante (desde Cast o WebSocket)
+  const applyPlaybackState = (data: SyncedPlaybackState) => {
+    setState(data);
+
+    // Actualizar anclas de sincronización
+    anchorPositionRef.current = data.position_ms;
+    anchorPerfTimeRef.current = performance.now();
+    isPlayingRef.current = data.is_playing;
+    durationMsRef.current = data.duration_ms;
+    linesRef.current = data.lyrics_lines || [];
+
+    // Actualizar índice inicial
+    const idx = findActiveLineIndex(data.position_ms, linesRef.current);
+    setActiveLineIndex(idx);
+    setInterpolatedPositionMs(data.position_ms);
+  };
+
+  // 1. Integración con Google Cast Receiver Framework (CAF v3)
+  useEffect(() => {
+    try {
+      const castCtx = window.cast?.framework?.CastReceiverContext?.getInstance?.();
+      if (castCtx) {
+        console.log('[useSyncedLyrics] Google Cast Receiver SDK detectado. Inicializando CAF v3...');
+        setIsCastMode(true);
+
+        castCtx.addCustomMessageListener(CAST_NAMESPACE, (event: any) => {
+          try {
+            console.log('[useSyncedLyrics] Mensaje recibido vía Cast Custom Channel:', event);
+            const data: SyncedPlaybackState =
+              typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            applyPlaybackState(data);
+            setIsConnected(true);
+          } catch (err) {
+            console.error('[useSyncedLyrics] Error decodificando payload de Cast:', err);
+          }
+        });
+
+        // Iniciar el contexto de recepción en Cast
+        castCtx.start({
+          disableIdleTimeout: true,
+          statusText: 'Alexa Lyrics TV listo',
+        });
+        console.log('[useSyncedLyrics] CastReceiverContext iniciado correctamente.');
+      }
+    } catch (e) {
+      console.warn('[useSyncedLyrics] CAF no disponible o error al inicializar:', e);
+    }
+  }, []);
+
+  // 2. Canal de transporte WebSocket (para navegador directo, móvil y desarrollo)
   const host = window.location.hostname || 'localhost';
   const wsPort = window.location.port === '5173' ? '8000' : (window.location.port || '8000');
   const serverUrl = `http://${host}:${wsPort}`;
@@ -67,19 +120,7 @@ export function useSyncedLyrics(): UseSyncedLyricsResult {
         ws.onmessage = (event) => {
           try {
             const data: SyncedPlaybackState = JSON.parse(event.data);
-            setState(data);
-
-            // Actualizar anclas de sincronización
-            anchorPositionRef.current = data.position_ms;
-            anchorPerfTimeRef.current = performance.now();
-            isPlayingRef.current = data.is_playing;
-            durationMsRef.current = data.duration_ms;
-            linesRef.current = data.lyrics_lines || [];
-
-            // Actualizar índice inicial
-            const idx = findActiveLineIndex(data.position_ms, linesRef.current);
-            setActiveLineIndex(idx);
-            setInterpolatedPositionMs(data.position_ms);
+            applyPlaybackState(data);
           } catch (e) {
             console.error('[useSyncedLyrics] Error parseando mensaje WS:', e);
           }
@@ -152,6 +193,7 @@ export function useSyncedLyrics(): UseSyncedLyricsResult {
     interpolatedPositionMs,
     activeLineIndex,
     isConnected,
+    isCastMode,
     serverUrl,
   };
 }

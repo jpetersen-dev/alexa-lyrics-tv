@@ -113,15 +113,25 @@ La documentación oficial de Spotify Web API contiene la siguiente prohibición 
 
 ## 4. Componentes Detallados
 
-### 4.1. Custom Web Receiver (Google Cast)
-- **Framework**: Cast Application Framework (CAF) Web Receiver SDK v3.
-- **Frontend**: React 19 o Vanilla HTML5 + CSS ultraligero con Tailwind CSS para máxima fluidez en el procesador limitado del Chromecast.
-- **Canal de Comunicación**:
-  - Namespace dedicado: `urn:x-cast:com.alexalyricstv.sync`
-  - Utiliza el bus de mensajes nativo de Google Cast (`castReceiverContext.addCustomMessageListener(...)`).
-  - **Ventaja de seguridad y red**: Al viajar la información a través del canal Cast local abierto por el backend emisor (puerto 8009 TLS), **no se generan problemas de Mixed Content ni CORS** entre la página HTTPS del Receiver y la máquina local.
-- **Alojamiento (Hosting)**:
-  - **Vercel** proporciona HTTPS válido obligatorio por Chromecast, despliegue continuo y CDN global con latencia despreciable.
+### 4.1. Custom Web Receiver (Google Cast CAF v3) y Controlador Emisor
+- **Arquitectura Receptora Híbrida Universal (`web/`)**:
+  - **Framework**: Cast Application Framework (CAF) Web Receiver SDK v3.
+  - **Doble Canal de Sincronización**:
+    - **Modo Cast TV**: Si `window.cast` está disponible (ejecutándose en un Chromecast), se suscribe al Custom Channel con namespace `urn:x-cast:com.alexalyricstv.sync` y recibe los estados transmitidos por el daemon local sobre el canal TLS de Cast.
+    - **Modo Web / Navegador / Móvil**: Si corre en un navegador estándar (Chrome, Safari, Cast Tab), abre un WebSocket a `/ws/playback`.
+  - Ambos canales alimentan la misma función `applyPlaybackState()` y el reloj interpolador local a 60 fps (`requestAnimationFrame` + `performance.now()`).
+  - **Alojamiento (Hosting)**:
+    - Configurado para **Vercel** (`web/vercel.json`) cumpliendo el requisito estricto de HTTPS público y encabezados CORS necesarios para Cast.
+
+- **Controlador Emisor Cast Backend (`src/cast_controller.py`)**:
+  - `LyricsCastController`: Extiende `pychromecast.controllers.BaseController` registrando el namespace `urn:x-cast:com.alexalyricstv.sync`.
+  - `CastManager`:
+    - Descubre dispositivos Chromecast en la red local vía mDNS (`zeroconf`) o mediante conexión directa por dirección IP.
+    - Conecta mediante socket seguro TLS (puerto 8009).
+    - Lanza la aplicación mediante `start_app(app_id)` y monitoriza su ciclo de vida.
+    - Transmite en tiempo real el payload canónico `SyncedPlaybackState`.
+  - **Seguridad y Aislamiento**:
+    - Al viajar los datos por el socket local TLS del protocolo Cast, no hay exposición de credenciales en la red externa ni problemas de *Mixed Content*.
 
 ### 4.2. Motor de Letras (Lyrics Engine + LRCLIB)
 - **Endpoint**: `https://lrclib.net/api/get?artist_name={artist}&track_name={track}&album_name={album}&duration={duration}`

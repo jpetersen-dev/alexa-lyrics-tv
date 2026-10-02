@@ -54,3 +54,15 @@ def test_websocket_playback_initial_state(client):
         assert "position_ms" in data
         assert "lyrics_status" in data
         assert "active_line_index" in data
+
+
+def test_api_cast_endpoints(client):
+    # 1. Status inicial
+    resp = client.get("/api/cast/status")
+    assert resp.status_code == 200
+    assert resp.json()["connected"] is False
+
+    # 2. Desconexión
+    resp_disc = client.post("/api/cast/disconnect")
+    assert resp_disc.status_code == 200
+

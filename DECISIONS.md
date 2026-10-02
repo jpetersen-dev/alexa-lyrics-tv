@@ -124,3 +124,23 @@ Para validar visualmente el comportamiento del motor de sincronización antes de
      - Pantalla ambiental con reloj digital grande cuando la reproducción está en pausa o detenida.
      - Panel de diagnóstico flotante (`DiagnosticPanel`) colapsable para pruebas de campo e inspección de LRCLIB en vivo.
 
+---
+
+## ADR 009: Arquitectura Híbrida Universal para Google Cast Custom Web Receiver (CAF v3) y Fallback WebSocket
+
+### Contexto
+El despliegue en Google Chromecast requiere compatibilidad estricta con el Cast Application Framework (CAF v3) y transmisión a través de canales TLS seguros (`urn:x-cast:com.alexalyricstv.sync`), mientras que para el desarrollo local, pruebas móviles y entornos sin registrar en Google Cast Developer Console ($5 USD) se requiere acceso mediante navegadores estándar y WebSockets.
+
+### Decisión
+1. **Receptor Web Universal Híbrido (`web/`)**:
+   - Se integró el SDK oficial de Google Cast CAF v3 en `web/index.html`:
+     `<script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v1.0/cast_receiver_framework.js"></script>`
+   - `useSyncedLyrics` detecta dinámicamente si `window.cast` está disponible:
+     - Si opera en Chromecast (CAF v3 activo): Escucha el Custom Channel `urn:x-cast:com.alexalyricstv.sync` alimentado por el daemon local.
+     - Si opera en navegador estándar (PC, móvil, tablet): Conecta directamente al canal WebSocket `/ws/playback`.
+   - Ambos canales alimentan la misma función unificada `applyPlaybackState()`, manteniendo la interpolación fluida a 60 fps intacta.
+2. **Controlador Emisor Cast Backend (`src/cast_controller.py`)**:
+   - Implementa `LyricsCastController` extendiendo `pychromecast.controllers.BaseController`.
+   - `CastManager` gestiona descubrimiento de dispositivos en la red local (mDNS zeroconf) y conexiones directas por dirección IP.
+   - Enlace bidireccional en `src/server.py`: cada actualización emitida a WebSockets se replica de forma no bloqueante a los dispositivos Cast activos.
+   - Configuración de empaquetado para despliegue en Vercel con HTTPS mediante `web/vercel.json`.

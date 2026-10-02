@@ -26,9 +26,10 @@ from src.mock_provider import MockPlaybackProvider
 from src.lrclib_provider import LRCLIBLyricsProvider
 from src.sync_engine import SyncEngine
 from src.sync_models import SyncedPlaybackState
+from src.cast_controller import CastManager, DEFAULT_CAST_APP_ID
 
 
-# --- Modelos de Entrada para la API Mock ---
+# --- Modelos de Entrada para la API Mock y Cast ---
 class SeekRequest(BaseModel):
     position_ms: int
 
@@ -42,7 +43,17 @@ class LoadTrackRequest(BaseModel):
     is_playing: bool = True
 
 
-# --- Gestor de Conexiones WebSocket ---
+class CastConnectRequest(BaseModel):
+    name: Optional[str] = None
+    host: Optional[str] = None
+    timeout: float = 5.0
+
+
+class CastLaunchRequest(BaseModel):
+    app_id: str = DEFAULT_CAST_APP_ID
+
+
+# --- Gestor de Conexiones WebSocket y Cast ---
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -75,6 +86,7 @@ manager = ConnectionManager()
 mock_provider = MockPlaybackProvider()
 lyrics_provider = LRCLIBLyricsProvider()
 engine = SyncEngine(lyrics_provider=lyrics_provider)
+cast_manager = CastManager()
 
 # Inicializar con Queen - Bohemian Rhapsody
 mock_provider.load_track(
@@ -91,8 +103,9 @@ mock_provider.load_track(
 # --- Bucle de Sincronización en Segundo Plano ---
 async def background_sync_loop():
     """
-    Bucle asíncrono que consulta el PlaybackProvider cada 200 ms y emite
+    Bucle asíncrono que consulta el PlaybackProvider cada 150 ms y emite
     actualizaciones ante cambios de línea, pausas, saltos o pulsos de referencia (3s).
+    Transmite simultáneamente hacia WebSockets (navegador/móvil) y Google Cast (TV).
     """
     last_line_idx = -2
     last_is_playing = None
@@ -112,7 +125,12 @@ async def background_sync_loop():
 
             if line_changed or state_changed or track_changed or pulse_due:
                 payload = state.to_dict()
+                # 1. Enviar a clientes WebSocket
                 await manager.broadcast(payload)
+
+                # 2. Enviar a Google Cast si hay un televisor conectado
+                if cast_manager.is_connected:
+                    cast_manager.send_playback_state(payload)
 
                 last_line_idx = state.active_line_index
                 last_is_playing = state.is_playing
@@ -129,9 +147,10 @@ async def background_sync_loop():
 async def lifespan(app: FastAPI):
     # Iniciar bucle en segundo plano al arrancar
     sync_task = asyncio.create_task(background_sync_loop())
-    print("🚀 Servidor FastAPI + SyncEngine iniciado correctamente.")
+    print("🚀 Servidor FastAPI + SyncEngine + Cast iniciado correctamente.")
     yield
-    # Cancelar tarea al detener
+    # Desconectar Cast y cancelar tarea al detener
+    cast_manager.disconnect()
     sync_task.cancel()
     try:
         await sync_task
@@ -242,6 +261,63 @@ async def mock_load_track(req: LoadTrackRequest):
     state = engine.process_observation(mock_provider.get_current_playback())
     await manager.broadcast(state.to_dict())
     return {"message": f"Pista cargada: {req.artist} - {req.title}", "state": state.to_dict()}
+
+
+# --- Endpoints REST para Gestión de Google Cast ---
+@app.get("/api/cast/status")
+async def get_cast_status():
+    device_name = (
+        cast_manager.cast_device.name
+        if (cast_manager.is_connected and cast_manager.cast_device)
+        else None
+    )
+    model_name = (
+        cast_manager.cast_device.model_name
+        if (cast_manager.is_connected and cast_manager.cast_device)
+        else None
+    )
+    return {
+        "connected": cast_manager.is_connected,
+        "device_name": device_name,
+        "model_name": model_name,
+    }
+
+
+@app.get("/api/cast/devices")
+async def get_cast_devices(timeout: float = 4.0, host: Optional[str] = None):
+    devices = cast_manager.discover_devices(timeout=timeout, host=host)
+    return {"devices": devices}
+
+
+@app.post("/api/cast/connect")
+async def connect_cast(req: CastConnectRequest):
+    success = cast_manager.connect_to_device(name=req.name, host=req.host, timeout=req.timeout)
+    if not success:
+        raise HTTPException(status_code=400, detail="No se pudo conectar al dispositivo Chromecast")
+    device_name = cast_manager.cast_device.name if cast_manager.cast_device else "Desconocido"
+    return {
+        "message": f"Conectado a Chromecast: {device_name}",
+        "device": device_name,
+    }
+
+
+@app.post("/api/cast/launch")
+async def launch_cast_app(req: CastLaunchRequest):
+    if not cast_manager.is_connected:
+        raise HTTPException(status_code=400, detail="No hay ningún dispositivo Chromecast conectado")
+    success = cast_manager.launch_app(req.app_id)
+    if not success:
+        raise HTTPException(status_code=500, detail=f"No se pudo iniciar la aplicación {req.app_id}")
+    # Enviar estado actual de inmediato
+    if engine.last_state:
+        cast_manager.send_playback_state(engine.last_state.to_dict())
+    return {"message": f"Aplicación {req.app_id} lanzada exitosamente"}
+
+
+@app.post("/api/cast/disconnect")
+async def disconnect_cast():
+    cast_manager.disconnect()
+    return {"message": "Desconectado de Chromecast"}
 
 
 # --- Montaje de Archivos Estáticos de Frontend (para producción/dist) ---
