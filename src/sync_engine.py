@@ -171,7 +171,11 @@ class SyncEngine:
             duration_ms=self.clock.duration_ms,
             position_ms=current_pos_ms,
             is_playing=self.clock.is_playing,
-            lyrics_status=self._current_lyrics.status.value,
+            lyrics_status=(
+                self._current_lyrics.status.value
+                if hasattr(self._current_lyrics.status, "value")
+                else str(self._current_lyrics.status)
+            ),
             lyrics_lines=lines_serialized,
             active_line_index=active_res.index,
             active_line_text=active_res.line.text if active_res.line else None,

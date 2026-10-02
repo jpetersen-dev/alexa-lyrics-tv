@@ -27,9 +27,10 @@ from src.lrclib_provider import LRCLIBLyricsProvider
 from src.sync_engine import SyncEngine
 from src.sync_models import SyncedPlaybackState
 from src.cast_controller import CastManager, DEFAULT_CAST_APP_ID
+from src.playback_orchestrator import PlaybackOrchestrator
 
 
-# --- Modelos de Entrada para la API Mock y Cast ---
+# --- Modelos de Entrada para la API Mock, Cast, Proveedores y AutoCast ---
 class SeekRequest(BaseModel):
     position_ms: int
 
@@ -51,6 +52,29 @@ class CastConnectRequest(BaseModel):
 
 class CastLaunchRequest(BaseModel):
     app_id: str = DEFAULT_CAST_APP_ID
+
+
+class SetProviderRequest(BaseModel):
+    provider: str
+
+
+class WebhookPlaybackRequest(BaseModel):
+    title: str
+    artist: str
+    album: Optional[str] = None
+    duration_ms: int = 0
+    progress_ms: int = 0
+    is_playing: bool = True
+    device_name: Optional[str] = "Alexa Echo"
+
+
+class AutoCastConfigRequest(BaseModel):
+    enabled: Optional[bool] = None
+    target_device: Optional[str] = None
+    target_host: Optional[str] = None
+    target_app_id: Optional[str] = None
+    idle_timeout_seconds: Optional[float] = None
+
 
 
 # --- Gestor de Conexiones WebSocket y Cast ---
@@ -83,10 +107,11 @@ class ConnectionManager:
 
 # --- Estado Global de la Aplicación ---
 manager = ConnectionManager()
-mock_provider = MockPlaybackProvider()
 lyrics_provider = LRCLIBLyricsProvider()
 engine = SyncEngine(lyrics_provider=lyrics_provider)
 cast_manager = CastManager()
+orchestrator = PlaybackOrchestrator(engine=engine, cast_manager=cast_manager, initial_provider="mock")
+mock_provider = orchestrator.mock_provider
 
 # Inicializar con Queen - Bohemian Rhapsody
 mock_provider.load_track(
@@ -103,7 +128,7 @@ mock_provider.load_track(
 # --- Bucle de Sincronización en Segundo Plano ---
 async def background_sync_loop():
     """
-    Bucle asíncrono que consulta el PlaybackProvider cada 150 ms y emite
+    Bucle asíncrono que consulta el PlaybackOrchestrator cada 150 ms y emite
     actualizaciones ante cambios de línea, pausas, saltos o pulsos de referencia (3s).
     Transmite simultáneamente hacia WebSockets (navegador/móvil) y Google Cast (TV).
     """
@@ -114,28 +139,28 @@ async def background_sync_loop():
 
     while True:
         try:
-            playback = mock_provider.get_current_playback()
-            state = engine.process_observation(playback)
+            state = orchestrator.tick()
 
-            now = time.time()
-            line_changed = state.active_line_index != last_line_idx
-            state_changed = state.is_playing != last_is_playing
-            track_changed = state.track != last_track
-            pulse_due = (now - last_pulse_time) >= 3.0  # Pulso cada 3s para recalibrar
+            if state:
+                now = time.time()
+                line_changed = state.active_line_index != last_line_idx
+                state_changed = state.is_playing != last_is_playing
+                track_changed = state.track != last_track
+                pulse_due = (now - last_pulse_time) >= 3.0  # Pulso cada 3s para recalibrar
 
-            if line_changed or state_changed or track_changed or pulse_due:
-                payload = state.to_dict()
-                # 1. Enviar a clientes WebSocket
-                await manager.broadcast(payload)
+                if line_changed or state_changed or track_changed or pulse_due:
+                    payload = state.to_dict()
+                    # 1. Enviar a clientes WebSocket
+                    await manager.broadcast(payload)
 
-                # 2. Enviar a Google Cast si hay un televisor conectado
-                if cast_manager.is_connected:
-                    cast_manager.send_playback_state(payload)
+                    # 2. Enviar a Google Cast si hay un televisor conectado
+                    if cast_manager.is_connected:
+                        cast_manager.send_playback_state(payload)
 
-                last_line_idx = state.active_line_index
-                last_is_playing = state.is_playing
-                last_track = state.track
-                last_pulse_time = now
+                    last_line_idx = state.active_line_index
+                    last_is_playing = state.is_playing
+                    last_track = state.track
+                    last_pulse_time = now
 
         except Exception as e:
             print(f"[Server] Error en background_sync_loop: {e}")
@@ -318,6 +343,60 @@ async def launch_cast_app(req: CastLaunchRequest):
 async def disconnect_cast():
     cast_manager.disconnect()
     return {"message": "Desconectado de Chromecast"}
+
+
+# --- Endpoints REST para Gestión de Proveedores de Reproducción y AutoCast ---
+@app.get("/api/playback/provider")
+async def get_playback_provider():
+    return orchestrator.get_providers_status()
+
+
+@app.post("/api/playback/provider")
+async def set_playback_provider(req: SetProviderRequest):
+    success = orchestrator.set_active_provider(req.provider)
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Proveedor desconocido: {req.provider}")
+    return {"message": f"Proveedor activo: {req.provider}", "status": orchestrator.get_providers_status()}
+
+
+@app.post("/api/playback/update")
+async def update_playback_webhook(req: WebhookPlaybackRequest):
+    orchestrator.webhook_provider.update_playback(
+        title=req.title,
+        artist=req.artist,
+        album=req.album,
+        duration_ms=req.duration_ms,
+        progress_ms=req.progress_ms,
+        is_playing=req.is_playing,
+        device_name=req.device_name,
+    )
+    if orchestrator.active_provider_name != "webhook":
+        orchestrator.set_active_provider("webhook")
+
+    state = orchestrator.tick()
+    if state:
+        await manager.broadcast(state.to_dict())
+        if cast_manager.is_connected:
+            cast_manager.send_playback_state(state.to_dict())
+    return {"message": "Estado de reproducción actualizado", "state": state.to_dict() if state else None}
+
+
+@app.get("/api/autocast/config")
+async def get_autocast_config():
+    return orchestrator.get_providers_status()["autocast"]
+
+
+@app.post("/api/autocast/config")
+async def configure_autocast(req: AutoCastConfigRequest):
+    cfg = orchestrator.configure_autocast(
+        enabled=req.enabled,
+        target_device=req.target_device,
+        target_host=req.target_host,
+        target_app_id=req.target_app_id,
+        idle_timeout_seconds=req.idle_timeout_seconds,
+    )
+    return {"message": "Configuración de AutoCast actualizada", "autocast": cfg}
+
 
 
 # --- Montaje de Archivos Estáticos de Frontend (para producción/dist) ---

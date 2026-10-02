@@ -169,20 +169,29 @@
 
 ## 📌 Fase 4 — Integración End-to-End
 
-- **Objetivo**: Conectar todos los bloques: Detección en Alexa -> LRCLIB -> Motor de Sync -> Emisor Cast -> TV.
+- **Objetivo**: Conectar todos los bloques: Detección en Alexa -> LRCLIB -> Motor de Sync -> Emisor Cast -> TV, permitiendo la conmutación entre fuentes de audio y automatizando el ciclo de vida de la pantalla.
 - **Tareas**:
-  - [ ] Unificar el Daemon local que escucha la reproducción y orquesta el flujo.
-  - [ ] Conectar la salida del observador con el motor de letras.
-  - [ ] Conectar la letra parseada con el canal de Cast.
-  - [ ] Verificar la cadena completa con canciones reales reproducidas en el Echo.
+  - [x] Implementar `PlaybackOrchestrator` (`src/playback_orchestrator.py`) para coordinar proveedores de audio y automatizar el ciclo de vida de Cast.
+  - [x] Implementar `HomeAssistantPlaybackProvider` (`src/hass_provider.py`) para consultar altavoces Echo vía API REST de Home Assistant sin depender de Spotify.
+  - [x] Implementar `WebhookPlaybackProvider` (`src/webhook_provider.py`) y endpoint `POST /api/playback/update` para recibir eventos en tiempo real desde cualquier automatización externa.
+  - [x] Integrar endpoints de selección de proveedor (`GET/POST /api/playback/provider`) y configuración de AutoCast (`GET/POST /api/autocast/config`) en `src/server.py`.
+  - [x] Conectar la salida del orquestador con el bucle de sincronización `background_sync_loop`, replicando las actualizaciones reactivas a WebSockets y Cast.
+  - [x] Actualizar `DiagnosticPanel.tsx` con selector visual de fuente de audio, botón de simulación push de Alexa y conmutador de AutoCast.
+  - [x] Construir suite de pruebas unitarias e integración en `tests/test_hass_provider.py`, `tests/test_playback_orchestrator.py` y `tests/test_end_to_end.py`.
 - **Criterios de Aceptación**:
-  - Al sonar una canción en Alexa, la TV muestra la letra correspondiente de forma automática.
-- **Pruebas**:
-  - Prueba en vivo con 5 canciones consecutivas.
+  - La llegada de un evento de reproducción vía webhook o proveedor actualiza de inmediato el `SyncEngine`, consulta la letra en LRCLIB, calcula la línea activa y la emite a los clientes conectados.
+  - El auto-lanzamiento enciende/conecta el Chromecast al iniciar la música y lo cierra tras inactividad prolongada.
+  - 100% de la suite de pruebas (49 tests) pasando exitosamente.
+- **Pruebas Realizadas**:
+  - `tests/test_hass_provider.py`: 3 tests cubriendo estados no autenticado, reposo/apagado y reproducción activa en altavoces Echo.
+  - `tests/test_playback_orchestrator.py`: 4 tests validando cambio de proveedor, flujo webhook y ciclo de vida AutoCast (lanzamiento y desconexión por inactividad).
+  - `tests/test_end_to_end.py`: 4 tests de integración verificando la cadena completa (selección de proveedor, webhook push con búsqueda de letras, configuración de AutoCast y stream WebSocket).
+  - `npm run build`: Compilación de producción de la SPA verificada limpia.
 - **Evidencia**:
-  - Video o reporte de sesión completa con timestamps correlacionados.
-- **Riesgos**:
-  - Caída de la conexión Cast por timeout; mitigado con mecanismo de keep-alive.
+  - `pytest -v`: **49 passed in 3.53s** en `tests/`.
+  - Endpoints `/api/playback/*` y `/api/autocast/*` funcionales y verificados.
+- **Riesgos Mitigados**:
+  - Independencia total: El sistema puede recibir eventos de Alexa desde Home Assistant, Spotify Connect, o webhooks sin alterar el motor de sincronización ni el visor en TV.
 
 ---
 

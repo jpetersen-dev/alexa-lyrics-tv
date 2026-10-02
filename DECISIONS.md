@@ -144,3 +144,24 @@ El despliegue en Google Chromecast requiere compatibilidad estricta con el Cast 
    - `CastManager` gestiona descubrimiento de dispositivos en la red local (mDNS zeroconf) y conexiones directas por dirección IP.
    - Enlace bidireccional en `src/server.py`: cada actualización emitida a WebSockets se replica de forma no bloqueante a los dispositivos Cast activos.
    - Configuración de empaquetado para despliegue en Vercel con HTTPS mediante `web/vercel.json`.
+
+---
+
+## ADR 010: Orquestación Universal de Fuentes de Audio y Ciclo de Vida Automático de TV (AutoCast)
+
+### Contexto
+Para alcanzar la experiencia de karaoke ambiental automático descrita en la misión del proyecto sin atarse de forma irreversible a Spotify (pendiente de resolución de políticas) ni requerir intervención manual constante para encender y apagar el televisor, se requería una capa unificadora capaz de coordinar múltiples observadores de audio y automatizar el ciclo de vida del Chromecast.
+
+### Decisión
+1. **Orquestador Universal de Reproducción (`src/playback_orchestrator.py`)**:
+   - Actúa como hub central entre cualquier fuente de audio y el `SyncEngine`.
+   - Soporta 4 adaptadores desacoplados e intercambiables en caliente:
+     - `mock`: Simulador determinista para desarrollo y pruebas.
+     - `webhook`: Endpoint HTTP `POST /api/playback/update` para recibir eventos en tiempo real desde Custom Skills, scripts de automatización o webhooks locales.
+     - `homeassistant`: Consulta a entidades `media_player.echo_*` vía API REST de Home Assistant (integración `alexa_media_player`).
+     - `spotify`: Conexión directa a Spotify Connect Web API si se configuran credenciales.
+2. **Ciclo de Vida Automático de Cast (AutoCast)**:
+   - **Auto-Lanzamiento**: Al detectar una transición de estado a `is_playing = True`, si AutoCast está habilitado y el Chromecast no está conectado, el orquestador se conecta al televisor por mDNS o IP, lanza el Custom Web Receiver y transmite inmediatamente el estado actual.
+   - **Auto-Cierre por Inactividad**: Si la reproducción permanece pausada o inactiva por más de un tiempo configurable (por defecto 180 segundos / 3 minutos), el daemon invoca `quit_app()` y desconecta la sesión, permitiendo que el Chromecast y el televisor vuelvan al modo ambiental/reposo de bajo consumo.
+   - **Keep-Alive**: Cada 3 segundos se emite un pulso temporal de anclaje para refrescar el canal de Cast y evitar desconexiones por timeout de inactividad de socket.
+

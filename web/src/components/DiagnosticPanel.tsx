@@ -101,6 +101,46 @@ export const DiagnosticPanel: React.FC<DiagnosticPanelProps> = ({
     setCastDeviceName(null);
   };
 
+
+  // Estado de Proveedor y AutoCast
+  const [activeProvider, setActiveProvider] = useState<string>('mock');
+  const [autoCastEnabled, setAutoCastEnabled] = useState<boolean>(false);
+
+  // Cargar estado inicial de proveedores
+  React.useEffect(() => {
+    fetch(`${serverUrl}/api/playback/provider`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.active_provider) setActiveProvider(data.active_provider);
+        if (data.autocast) setAutoCastEnabled(data.autocast.enabled);
+      })
+      .catch(() => {});
+  }, [serverUrl]);
+
+  const handleSetProvider = async (provider: string) => {
+    const res = await sendPost('/api/playback/provider', { provider });
+    if (res) setActiveProvider(provider);
+  };
+
+  const handleToggleAutoCast = async () => {
+    const nextState = !autoCastEnabled;
+    const res = await sendPost('/api/autocast/config', { enabled: nextState });
+    if (res) setAutoCastEnabled(nextState);
+  };
+
+  const handleSimulateAlexaWebhook = async () => {
+    await sendPost('/api/playback/update', {
+      title: customTitle,
+      artist: customArtist,
+      album: customAlbum,
+      duration_ms: 354000,
+      progress_ms: 12000,
+      is_playing: true,
+      device_name: 'Echo Dot Alexa (Salón)',
+    });
+  };
+
+
   return (
     <div className={`diag-panel-container ${isOpen ? 'open' : 'closed'}`}>
       <button
@@ -169,9 +209,45 @@ export const DiagnosticPanel: React.FC<DiagnosticPanelProps> = ({
             </div>
           </div>
 
+          {/* Selector de Fuente de Audio */}
+          <div style={{ marginTop: '10px', padding: '6px', background: '#12121a', borderRadius: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <span className="section-label">Fuente de Audio:</span>
+              <span style={{ fontSize: '11px', color: '#38bdf8' }}>{state?.device_name || 'Sin altavoz'}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {['mock', 'webhook', 'homeassistant', 'spotify'].map((p) => (
+                <button
+                  key={p}
+                  className={`btn-small ${activeProvider === p ? 'btn-primary' : ''}`}
+                  onClick={() => handleSetProvider(p)}
+                  style={{ fontSize: '11px', padding: '2px 6px' }}
+                >
+                  {p.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            {activeProvider === 'webhook' && (
+              <button
+                className="btn-small"
+                onClick={handleSimulateAlexaWebhook}
+                style={{ marginTop: '6px', width: '100%', background: '#3b82f6', color: '#fff' }}
+              >
+                📡 Simular Push de Alexa Echo
+              </button>
+            )}
+          </div>
+
           {/* Sección de Gestión de Google Cast */}
           <div className="diag-cast-section" style={{ marginTop: '12px', borderTop: '1px solid #333', paddingTop: '8px' }}>
-            <span className="section-label">📺 Google Cast (Televisor):</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="section-label">📺 Google Cast (Televisor):</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', cursor: 'pointer' }}>
+                <input type="checkbox" checked={autoCastEnabled} onChange={handleToggleAutoCast} />
+                <span>AutoCast TV</span>
+              </label>
+            </div>
+
             {castConnected ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
                 <div style={{ color: '#4ade80', fontSize: '13px' }}>

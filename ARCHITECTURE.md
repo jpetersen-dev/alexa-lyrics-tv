@@ -207,7 +207,20 @@ La documentación oficial de Spotify Web API contiene la siguiente prohibición 
 - **Visor Web React 19 (`web/`)**:
   - `useSyncedLyrics`: Hook personalizado que gestiona el WebSocket, la reconexión exponencial y el cálculo local continuo a 60 fps mediante `requestAnimationFrame` y `performance.now()`.
   - `KaraokeView`: Componente de pantalla completa optimizado para televisores con tipografía masiva (48px+), efectos de brillo/glow sobre la línea cantada, desplazamiento vertical continuo centrado y modo ambiental de reloj cuando está en pausa.
-  - `DiagnosticPanel`: Barra de control flotante que permite disparar cambios de estado en el backend e inspeccionar letras en vivo contra LRCLIB.
+  - `DiagnosticPanel`: Barra de control flotante que permite disparar cambios de estado en el backend, seleccionar fuentes de audio e inspeccionar letras en vivo contra LRCLIB.
+
+### 4.6. Orquestador de Reproducción y Ciclo de Vida Automático (AutoCast)
+- **`PlaybackOrchestrator` (`src/playback_orchestrator.py`)**:
+  - Hub central que desacopla la fuente de audio del `SyncEngine`.
+  - Conmutador en caliente de proveedores (`mock`, `webhook`, `homeassistant`, `spotify`):
+    - `WebhookPlaybackProvider`: Permite push HTTP (`POST /api/playback/update`) desde cualquier servicio o automatización.
+    - `HomeAssistantPlaybackProvider`: Consulta altavoces Echo a través de la integración `alexa_media_player` de Home Assistant.
+    - `SpotifyPlaybackProvider`: Adaptador oficial Spotify Connect (`/v1/me/player`).
+    - `MockPlaybackProvider`: Arnés determinista para pruebas automatizadas.
+  - **Reglas de AutoCast (Control Autónomo de Pantalla)**:
+    1. **Auto-Lanzamiento**: Al detectar `is_playing = True`, si AutoCast está habilitado, conecta automáticamente al Chromecast y lanza la app en el televisor.
+    2. **Auto-Cierre por Inactividad**: Al transcurrir más de 180 segundos en pausa o silencio, invoca `quit_app()` para apagar la sesión y devolver el televisor al protector de pantalla o reposo.
+    3. **Keep-Alive**: Emisión de pulsos cada 3 segundos garantizando la continuidad de la conexión TLS de Cast sin caídas.
 
 ---
 

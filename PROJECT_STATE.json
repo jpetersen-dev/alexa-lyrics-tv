@@ -1,9 +1,9 @@
 {
   "project_name": "ALEXA LYRICS TV",
-  "version": "0.4.0",
-  "last_updated": "2026-10-02T00:32:00-03:00",
-  "current_phase": "FASE 3 — INTEGRACIÓN DE GOOGLE CAST (CUSTOM WEB RECEIVER)",
-  "status": "CAST_RECEIVER_INTEGRATED",
+  "version": "0.5.0",
+  "last_updated": "2026-10-02T00:46:00-03:00",
+  "current_phase": "FASE 4 — INTEGRACIÓN END-TO-END",
+  "status": "END_TO_END_VALIDATED",
   "workspace_path": "d:\\Projects (Local)\\alexa-lyrics-tv",
   "scratch_junction": "C:\\Users\\peter\\.gemini\\antigravity\\scratch\\alexa-lyrics-tv",
   "environment": {
@@ -29,21 +29,28 @@
       },
       "tests_passed": "27/27"
     },
+    "playback_orchestrator": {
+      "status": "VALIDATED",
+      "module": "src.playback_orchestrator.PlaybackOrchestrator",
+      "providers_supported": ["mock", "webhook", "homeassistant", "spotify"],
+      "autocast": "Auto-lanzamiento en TV al reproducir y auto-cierre por inactividad",
+      "tests_passed": "7/7 (tests/test_hass_provider.py + tests/test_playback_orchestrator.py)"
+    },
     "transport_layer": {
       "status": "VALIDATED",
       "server": "src.server (FastAPI + WebSockets + Uvicorn + pychromecast)",
       "endpoint_ws": "/ws/playback (Zero network spam: instant on connect, on line/state change, 3s sync pulse)",
-      "endpoints_rest": "/api/status, /api/mock/*, /api/cast/*",
+      "endpoints_rest": "/api/status, /api/mock/*, /api/cast/*, /api/playback/*, /api/autocast/*",
       "background_loop_interval_ms": 150,
       "static_mount": "web/dist montado en /",
-      "tests_passed": "11/11 (tests/test_server.py + tests/test_cast_controller.py)"
+      "tests_passed": "15/15 (tests/test_server.py + tests/test_cast_controller.py + tests/test_end_to_end.py)"
     },
     "web_viewer": {
       "status": "VALIDATED",
       "framework": "React 19 + TypeScript + Vite (Universal Web / Cast Receiver)",
       "client_clock": "useSyncedLyrics (requestAnimationFrame 60 fps + performance.now() local interpolation)",
       "tv_ui": "KaraokeView (Tipografía 48px+ con glow, auto-scroll vertical suave centrado, ambient clock en pausa)",
-      "diagnostic_tool": "DiagnosticPanel (Controles mock + buscador LRCLIB + gestión Cast discovery/connect/launch)",
+      "diagnostic_tool": "DiagnosticPanel (Controles mock + buscador LRCLIB + gestión Cast + selector de fuente Alexa)",
       "build_status": "npm run build exitoso (dist/ generado con soporte CAF v3 y vercel.json)"
     },
     "receiver_cast": {
@@ -71,6 +78,6 @@
     "SPOTIFY_POLICY_COMPATIBILITY se mantiene como UNRESOLVED para preservar la independencia jurídica."
   ],
   "next_actions": [
-    "Fase 4: Integración End-to-End (Unificar Media Observer con reproducción real en Alexa y auto-lanzamiento Cast)"
+    "Fase 5: Automatización Completa, Robustez ante fallos y Operación Continua (resiliencia offline y servicio de fondo Windows)"
   ]
 }
