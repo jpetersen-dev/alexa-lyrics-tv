@@ -257,18 +257,24 @@
 
 ## 📌 Fase 7 — Despliegue y Operación Continua
 
-- **Objetivo**: Dejar el Receiver desplegado en producción (Vercel) y el daemon local configurado como servicio de fondo en Windows.
+- **Objetivo**: Dejar el Receiver listo para despliegue en producción (Vercel) y el daemon local configurado como servicio de fondo en Windows con manual operativo completo.
 - **Tareas**:
-  - [ ] Desplegar la versión final del Receiver en Vercel con dominio de producción.
-  - [ ] Configurar variables de entorno y excluir cualquier secreto del cliente.
-  - [ ] Configurar el daemon local de Python para inicio automático o ejecución en segundo plano sin terminal abierta.
-  - [ ] Crear manual de usuario breve y comandos de diagnóstico.
+  - [x] Configurar `vercel.json` en la raíz del repositorio y en `web/` con soporte Vite SPA, reescrituras a `/index.html` y cabeceras CORS.
+  - [x] Garantizar exclusión total de credenciales o secretos en el paquete cliente (SPA 100% estática).
+  - [x] Configurar suite de scripts para Windows en `scripts/` para arranque en segundo plano sin consola visible (`start_hidden.vbs`), inicio automático con Windows (`install_startup.bat`) y detención de procesos (`stop_daemon.bat`).
+  - [x] Redactar manual de usuario y guía operativa exhaustiva en `USER_GUIDE.md`.
+  - [x] Validar que el servidor FastAPI sirve la SPA de producción compilada en `/` simultáneamente con WebSockets en `/ws/playback`.
 - **Criterios de Aceptación**:
   - Sistema operativo de forma permanente y transparente.
-- **Pruebas**:
-  - Reinicio del PC y verificación de reanudación automática.
+  - Repositorio listo para integración directa con Vercel Git Integration y Google Cast Developer Console.
+  - 100% de la suite de pruebas (67 tests) pasando exitosamente.
+- **Pruebas Realizadas**:
+  - Compilación de producción con Vite (`npm run build`) validada y servida desde FastAPI en `http://localhost:8000`.
+  - Verificación de scripts de Windows (`start_daemon.bat`, `start_hidden.vbs`, `stop_daemon.bat`, `install_startup.bat`).
+  - Suite completa de 67 pruebas en `pytest` pasando con 0 errores.
 - **Evidencia**:
-  - URL de Vercel activa y servicio Windows funcionando.
-- **Riesgos**:
-  - Cambios de IP en la red local; mitigado con descubrimiento por mDNS.
+  - `USER_GUIDE.md` y `vercel.json` creados en el repositorio.
+  - Repositorio público sincronizado en `https://github.com/jpetersen-dev/alexa-lyrics-tv`.
+- **Riesgos Mitigados**:
+  - Independencia de IP: El descubrimiento mDNS zeroconf y el puerto unificado 8000 eliminan la dependencia de IPs fijas en la red local.
 

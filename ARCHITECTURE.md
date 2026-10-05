@@ -255,6 +255,14 @@ La documentación oficial de Spotify Web API contiene la siguiente prohibición 
 - **Reconexión Automática con Throttle**:
   - `PlaybackOrchestrator` implementa un límite de reintento de 10 segundos para buscar y reconectar el Chromecast mientras haya música activa, evitando saturar la CPU o la red mDNS si el televisor está apagado. Al encenderse, la conexión se establece automáticamente.
 
+### 4.9. Despliegue en Producción y Operación Continua
+- **Despliegue Híbrido en Vercel (`vercel.json`)**:
+  - `vercel.json` en la raíz mapea el comando de compilación (`cd web && npm install && npm run build`) y publica `web/dist`.
+  - Proporciona un endpoint HTTPS SSL compatible con Google Cast CAF v3 y permite asociar el dominio a una Google Cast Application ID en la Cast Developer Console.
+- **Operación Local de Cero Mantenimiento**:
+  - Ejecución como servicio silencioso en Windows (`scripts/start_hidden.vbs` o inicio automático con `scripts/install_startup.bat`).
+  - Puerto único 8000 sirviendo tanto la API REST/WebSockets como la SPA estática en `/`.
+
 ---
 
 ## 5. Decisiones Técnicas Fundamentales
@@ -264,6 +272,7 @@ La documentación oficial de Spotify Web API contiene la siguiente prohibición 
    - `FastAPI` para APIs de desarrollo, WebSockets de baja latencia y servicio de la SPA.
 2. **Frontend Receiver / Visor**: React 19 + TypeScript + Vite, optimizado para televisores 1080p/4K, convertible a Cast Custom Web Receiver (CAF v3) y desplegable en Vercel con HTTPS.
 3. **Manejo de Secretos**: Ningún token o secreto se transmite jamás al Chromecast ni se expone en el código cliente.
+
 
 
 

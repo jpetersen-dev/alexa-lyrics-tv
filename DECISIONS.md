@@ -220,5 +220,28 @@ Un sistema doméstico manos libres que corre de fondo debe sobrevivir a eventos 
 5. **Aislamiento de Excepciones en Proveedores Externos**:
    - `HomeAssistantPlaybackProvider` y `WebhookPlaybackProvider` aíslan cualquier excepción HTTP/JSON devolviendo `None`, manteniendo la estabilidad inquebrantable del bucle de eventos.
 
+---
+
+## ADR 013: Despliegue en Producción (Vercel + Daemon Windows) y Operación Manos Libres
+
+### Contexto
+Para consolidar la versión final del sistema `1.0.0`:
+1. El Cast Custom Web Receiver exige entrega vía HTTPS con certificados SSL válidos para operar en el ecosistema de Google Cast.
+2. El frontend debe poder desplegarse automáticamente sin intermediarios manuales al vincular el repositorio en Vercel.
+3. El daemon backend debe correr de manera ininterrumpida y desatendida en el PC doméstico con Windows.
+
+### Decisión
+1. **Configuración Declarativa para Vercel (`vercel.json` y `web/vercel.json`)**:
+   - Se definió un archivo `vercel.json` en la raíz del repositorio que instruye a Vercel a compilar la subcarpeta `web/` (`buildCommand: "cd web && npm install && npm run build"`) y publicar `web/dist`.
+   - Se añadieron reglas de reescritura hacia `/index.html` para el enrutamiento de la SPA y cabeceras CORS permisivas requeridas por el Cast Application Framework.
+2. **Arquitectura Híbrida de Doble Capa**:
+   - **Capa Nube (Edge / Static)**: El visor web estático se aloja en Vercel con HTTPS global de baja latencia (o localmente en el puerto 8000 si no se cuenta con conexión externa).
+   - **Capa Local (Edge Daemon)**: El daemon FastAPI + Python corre en la red local donde se encuentran los altavoces Alexa y el Chromecast, comunicándose por WebSockets y sockets TLS directos (puerto 8009).
+3. **Cero Secretos en el Cliente**:
+   - Ni el receptor web de Vercel ni la SPA local contienen llaves de API, credenciales ni tokens sensibles. Toda autenticación o comunicación externa (LRCLIB, Home Assistant) se realiza exclusivamente desde el backend local.
+4. **Manual Operativo Unificado (`USER_GUIDE.md`)**:
+   - Se documentaron detalladamente los métodos de inicio, control, acceso móvil, emparejamiento con Chromecast y gestión de proveedores.
+
+
 
 
