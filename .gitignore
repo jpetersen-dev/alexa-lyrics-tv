@@ -11,3 +11,4 @@ lyrics_cache.db
 .pytest_cache/
 node_modules/
 web/dist/
+config.json

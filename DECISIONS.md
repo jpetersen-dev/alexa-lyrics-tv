@@ -165,3 +165,30 @@ Para alcanzar la experiencia de karaoke ambiental automático descrita en la mis
    - **Auto-Cierre por Inactividad**: Si la reproducción permanece pausada o inactiva por más de un tiempo configurable (por defecto 180 segundos / 3 minutos), el daemon invoca `quit_app()` y desconecta la sesión, permitiendo que el Chromecast y el televisor vuelvan al modo ambiental/reposo de bajo consumo.
    - **Keep-Alive**: Cada 3 segundos se emite un pulso temporal de anclaje para refrescar el canal de Cast y evitar desconexiones por timeout de inactividad de socket.
 
+---
+
+## ADR 011: Configuración Persistente, Resiliencia de Enlace Cast y Daemon Silencioso en Windows
+
+### Contexto
+Para garantizar que Alexa Lyrics TV funcione de manera autónoma sin requerir reconfiguración manual tras cada reinicio del sistema ni dejar ventanas de consola abiertas en el escritorio de Windows:
+1. Las preferencias del usuario (dispositivo Chromecast objetivo, fuente de reproducción por defecto, credenciales de Home Assistant y tiempos de apagado) debían persistir de forma atómica en disco.
+2. La reconexión con el Chromecast sufría una penalización de 5 segundos debido al escaneo mDNS zeroconf inicial de `pychromecast`.
+3. El socket TLS hacia el Chromecast podía ser cerrado por el propio dispositivo si la música permanecía pausada durante periodos largos.
+4. El daemon debía poder iniciarse de forma 100% silenciosa en el arranque de Windows sin requerir herramientas pesadas ni servicios de terceros.
+
+### Decisión
+1. **Configuración Persistente (`src/config_manager.py`)**:
+   - Se diseñó la clase `ConfigManager`, que sincroniza las preferencias con `config.json` de forma segura con codificación UTF-8.
+   - El `PlaybackOrchestrator` y `src/server.py` se sincronizan bidireccionalmente con el archivo: cualquier modificación en caliente (`POST /api/config` o `/api/autocast/config`) se refleja en disco y se propaga en tiempo de ejecución.
+2. **Caché de Descubrimiento de Chromecast (`_device_cache`)**:
+   - `CastManager` almacena internamente la asociación entre nombre de dispositivo e IP/host resuelto.
+   - Al reconectar automáticamente ante una nueva canción, el sistema intenta conectar directamente por IP en <100 ms, recurriendo a mDNS solo si la IP cached deja de responder.
+3. **PINGs Keep-Alive en Canal Personalizado**:
+   - Se implementó `send_keep_alive()` en `CastManager`, transmitiendo un paquete PING ligero por el Custom Channel cada 15 segundos mientras el dispositivo esté conectado, evitando la caducidad del socket TLS durante canciones lentas o pausas prolongadas.
+4. **Scripts de Ejecución y Arranque Silencioso en Windows (`scripts/`)**:
+   - `start_daemon.bat`: Ejecución interactiva en primer plano con logs completos.
+   - `start_hidden.vbs`: Ejecutor basado en Windows Script Host (`wscript.exe`) con flag de ventana oculta (`0`), permitiendo que el servidor corra de fondo sin ventana cmd.
+   - `stop_daemon.bat`: Terminación limpia de cualquier proceso escuchando en el puerto 8000 mediante `netstat` y `taskkill`.
+   - `install_startup.bat` / `uninstall_startup.bat`: Registro y desregistro del acceso directo silencioso en la carpeta de inicio de Windows (`shell:startup`).
+
+

@@ -222,6 +222,25 @@ La documentación oficial de Spotify Web API contiene la siguiente prohibición 
     2. **Auto-Cierre por Inactividad**: Al transcurrir más de 180 segundos en pausa o silencio, invoca `quit_app()` para apagar la sesión y devolver el televisor al protector de pantalla o reposo.
     3. **Keep-Alive**: Emisión de pulsos cada 3 segundos garantizando la continuidad de la conexión TLS de Cast sin caídas.
 
+### 4.7. Configuración Persistente y Ejecución en Segundo Plano (Windows Daemon)
+- **Gestor de Configuración Persistente (`src/config_manager.py`)**:
+  - Almacena parámetros operativos en formato JSON (`config.json`):
+    - `default_provider`: Proveedor inicial de reproducción (`mock`, `webhook`, `homeassistant`, `spotify`).
+    - `autocast_enabled`: Flag maestro para auto-lanzar y auto-cerrar en el televisor.
+    - `target_cast_device` / `target_cast_host`: Identificador y dirección IP del Chromecast preferido.
+    - `idle_timeout_seconds`: Temporizador de inactividad antes de liberar el televisor (por defecto 180s).
+    - `keep_alive_interval_seconds`: Intervalo de paquetes PING ligeros a través del Custom Channel (por defecto 15s).
+    - Parámetros de conexión de Home Assistant (`hass_url`, `hass_token`, `hass_alexa_entity`).
+  - Endpoints REST en caliente: `GET /api/config` y `POST /api/config`.
+- **Caché de Dispositivos Cast en Memoria**:
+  - `CastManager` almacena mapeos nombre -> IP (`_device_cache`) para reconectar en <100 ms ante nuevas pistas, evitando la espera de 5 segundos de escaneo mDNS zeroconf.
+- **Suite de Scripts para Windows (`scripts/`)**:
+  - `start_daemon.bat`: Ejecución en primer plano con consola para diagnóstico y desarrollo.
+  - `start_hidden.vbs`: Lanzador silencioso que arranca el proceso Python/Uvicorn sin ventana visible en el escritorio.
+  - `stop_daemon.bat`: Detección y terminación forzada del proceso que ocupa el puerto 8000.
+  - `install_startup.bat`: Creación automática del acceso directo silencioso en la carpeta de inicio de Windows (`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`).
+  - `uninstall_startup.bat`: Eliminación limpia del acceso directo de arranque.
+
 ---
 
 ## 5. Decisiones Técnicas Fundamentales
@@ -231,4 +250,5 @@ La documentación oficial de Spotify Web API contiene la siguiente prohibición 
    - `FastAPI` para APIs de desarrollo, WebSockets de baja latencia y servicio de la SPA.
 2. **Frontend Receiver / Visor**: React 19 + TypeScript + Vite, optimizado para televisores 1080p/4K, convertible a Cast Custom Web Receiver (CAF v3) y desplegable en Vercel con HTTPS.
 3. **Manejo de Secretos**: Ningún token o secreto se transmite jamás al Chromecast ni se expone en el código cliente.
+
 

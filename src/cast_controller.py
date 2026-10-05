@@ -68,6 +68,9 @@ class CastManager:
         self.browser: Optional[Any] = None
         self._is_connected = False
         self._lock = threading.Lock()
+        self._device_cache: Dict[str, str] = {}  # name.lower() -> host
+        self._last_connected_host: Optional[str] = None
+        self._last_connected_name: Optional[str] = None
 
     @property
     def is_connected(self) -> bool:
@@ -76,18 +79,21 @@ class CastManager:
     def discover_devices(self, timeout: float = 5.0, host: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Escanea la red local en busca de dispositivos Chromecast o se conecta a una IP específica.
+        Actualiza la caché de dispositivos conocidos para conexiones instantáneas.
         """
         devices = []
         if host:
             try:
                 cast = pychromecast.Chromecast(host)
-                devices.append({
+                dev_info = {
                     "name": cast.name,
                     "model": cast.model_name,
                     "host": host,
                     "port": cast.port,
                     "uuid": str(cast.uuid),
-                })
+                }
+                devices.append(dev_info)
+                self._device_cache[cast.name.lower()] = host
                 cast.disconnect()
                 return devices
             except Exception as e:
@@ -98,13 +104,16 @@ class CastManager:
             chromecasts, browser = pychromecast.get_chromecasts(timeout=timeout)
             self.browser = browser
             for cc in chromecasts:
+                chost = getattr(cc.cast_info, "host", "unknown")
                 devices.append({
                     "name": cc.name,
                     "model": cc.model_name,
-                    "host": getattr(cc.cast_info, "host", "unknown"),
+                    "host": chost,
                     "port": getattr(cc.cast_info, "port", 8009),
                     "uuid": str(cc.uuid),
                 })
+                if chost != "unknown":
+                    self._device_cache[cc.name.lower()] = chost
             pychromecast.stop_discovery(browser)
         except Exception as e:
             logger.error(f"Error durante el descubrimiento de Cast: {e}")
@@ -119,17 +128,24 @@ class CastManager:
     ) -> bool:
         """
         Establece conexión física TLS con un Chromecast (por nombre o IP).
-        Registra el controlador personalizado con el namespace de la app.
+        Usa la caché de IP si el dispositivo ya fue descubierto previamente para evitar latencia mDNS.
         """
         with self._lock:
             self.disconnect()
 
+            # Optimización: si se especifica nombre pero tenemos la IP en caché, conectar directamente
+            target_host = host
+            if not target_host and name and name.lower() in self._device_cache:
+                cached_host = self._device_cache[name.lower()]
+                logger.info(f"Usando host en caché ({cached_host}) para Chromecast '{name}'...")
+                target_host = cached_host
+
             try:
-                if host:
-                    logger.info(f"Conectando a Chromecast por IP directa: {host}...")
-                    self.cast_device = pychromecast.Chromecast(host)
+                if target_host:
+                    logger.info(f"Conectando a Chromecast por IP: {target_host}...")
+                    self.cast_device = pychromecast.Chromecast(target_host)
                 else:
-                    logger.info(f"Buscando Chromecast con nombre '{name}'...")
+                    logger.info(f"Buscando Chromecast con nombre '{name}' vía mDNS...")
                     chromecasts, browser = pychromecast.get_chromecasts(timeout=timeout)
                     target = None
                     for cc in chromecasts:
@@ -151,6 +167,11 @@ class CastManager:
                 self.cast_device.register_handler(self.cast_controller)
 
                 self._is_connected = True
+                self._last_connected_name = self.cast_device.name
+                self._last_connected_host = getattr(self.cast_device.cast_info, "host", target_host)
+                if self.cast_device.name and self._last_connected_host:
+                    self._device_cache[self.cast_device.name.lower()] = self._last_connected_host
+
                 logger.info(
                     f"Conectado exitosamente a Chromecast: {self.cast_device.name} "
                     f"({self.cast_device.model_name})"
@@ -161,6 +182,17 @@ class CastManager:
                 logger.error(f"Error conectando a Chromecast: {e}")
                 self.disconnect()
                 return False
+
+    def send_keep_alive(self) -> bool:
+        """Envía un mensaje PING ligero por el Custom Channel para evitar caídas de socket."""
+        if not self.is_connected or not self.cast_controller:
+            return False
+        try:
+            self.cast_controller.send_message(json.dumps({"type": "PING", "time": time.time()}))
+            return True
+        except Exception:
+            self._is_connected = False
+            return False
 
     def launch_app(self, app_id: str = DEFAULT_CAST_APP_ID, timeout: float = 10.0) -> bool:
         """

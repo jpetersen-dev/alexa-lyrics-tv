@@ -1,9 +1,9 @@
 {
   "project_name": "ALEXA LYRICS TV",
-  "version": "0.5.0",
-  "last_updated": "2026-10-02T00:46:00-03:00",
-  "current_phase": "FASE 4 — INTEGRACIÓN END-TO-END",
-  "status": "END_TO_END_VALIDATED",
+  "version": "0.6.0",
+  "last_updated": "2026-10-05T03:00:00-03:00",
+  "current_phase": "FASE 5 — AUTOMATIZACIÓN COMPLETA Y CICLO DE VIDA",
+  "status": "LIFECYCLE_AUTOMATED",
   "workspace_path": "d:\\Projects (Local)\\alexa-lyrics-tv",
   "scratch_junction": "C:\\Users\\peter\\.gemini\\antigravity\\scratch\\alexa-lyrics-tv",
   "environment": {
@@ -33,14 +33,21 @@
       "status": "VALIDATED",
       "module": "src.playback_orchestrator.PlaybackOrchestrator",
       "providers_supported": ["mock", "webhook", "homeassistant", "spotify"],
-      "autocast": "Auto-lanzamiento en TV al reproducir y auto-cierre por inactividad",
-      "tests_passed": "7/7 (tests/test_hass_provider.py + tests/test_playback_orchestrator.py)"
+      "autocast": "Auto-lanzamiento en TV al reproducir, auto-cierre tras inactividad y keep-alive cada 15s",
+      "tests_passed": "10/10 (tests/test_hass_provider.py + tests/test_playback_orchestrator.py + tests/test_lifecycle.py)"
+    },
+    "configuration_manager": {
+      "status": "VALIDATED",
+      "module": "src.config_manager.ConfigManager",
+      "config_file": "config.json",
+      "endpoints_rest": "GET /api/config, POST /api/config",
+      "tests_passed": "4/4 (tests/test_config_manager.py)"
     },
     "transport_layer": {
       "status": "VALIDATED",
       "server": "src.server (FastAPI + WebSockets + Uvicorn + pychromecast)",
       "endpoint_ws": "/ws/playback (Zero network spam: instant on connect, on line/state change, 3s sync pulse)",
-      "endpoints_rest": "/api/status, /api/mock/*, /api/cast/*, /api/playback/*, /api/autocast/*",
+      "endpoints_rest": "/api/status, /api/config, /api/mock/*, /api/cast/*, /api/playback/*, /api/autocast/*",
       "background_loop_interval_ms": 150,
       "static_mount": "web/dist montado en /",
       "tests_passed": "15/15 (tests/test_server.py + tests/test_cast_controller.py + tests/test_end_to_end.py)"
@@ -60,7 +67,17 @@
       "hosting_target": "Vercel (Free tier, HTTPS SSL obligatorio, vercel.json configurado)",
       "custom_message_namespace": "urn:x-cast:com.alexalyricstv.sync",
       "input_payload": "SyncedPlaybackState",
-      "backend_controller": "src.cast_controller.CastManager"
+      "backend_controller": "src.cast_controller.CastManager (con caché de IP y Keep-Alive PING)"
+    },
+    "windows_background_daemon": {
+      "status": "IMPLEMENTED",
+      "scripts": {
+        "foreground": "scripts/start_daemon.bat",
+        "silent_background": "scripts/start_hidden.vbs",
+        "stop": "scripts/stop_daemon.bat",
+        "install_startup": "scripts/install_startup.bat",
+        "uninstall_startup": "scripts/uninstall_startup.bat"
+      }
     },
     "SPOTIFY_POLICY_COMPATIBILITY": {
       "status": "UNRESOLVED",
@@ -74,10 +91,12 @@
       "connectivity_test": "PASSED (Queen - Bohemian Rhapsody probado en vivo y verificado en caché)"
     }
   },
+  "total_automated_tests": "56 passing in pytest (100% success)",
   "blockers": [
     "SPOTIFY_POLICY_COMPATIBILITY se mantiene como UNRESOLVED para preservar la independencia jurídica."
   ],
   "next_actions": [
-    "Fase 5: Automatización Completa, Robustez ante fallos y Operación Continua (resiliencia offline y servicio de fondo Windows)"
+    "Fase 6: Pruebas de robustez y resiliencia ante cortes de red, canciones sin letra y caídas de dispositivos.",
+    "Fase 7: Despliegue en producción del Cast Receiver en Vercel."
   ]
 }

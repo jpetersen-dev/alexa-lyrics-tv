@@ -197,20 +197,34 @@
 
 ## 📌 Fase 5 — Automatización Completa y Ciclo de Vida
 
-- **Objetivo**: Lograr que el sistema no requiera ninguna intervención manual para operar en el día a día.
+- **Objetivo**: Lograr que el sistema no requiera ninguna intervención manual para operar en el día a día, persistiendo preferencias y permitiendo su ejecución como servicio silencioso en Windows.
 - **Tareas**:
-  - [ ] Auto-lanzamiento del Receiver en el Chromecast al detectar `PLAYING`.
-  - [ ] Manejo automático de pausa (congelar visualización).
-  - [ ] Detección inmediata de salto de canción y recarga de letra.
-  - [ ] Auto-cierre de la sesión de Cast tras 3 minutos de inactividad continuada.
+  - [x] Auto-lanzamiento del Receiver en el Chromecast al detectar `PLAYING`.
+  - [x] Manejo automático de pausa (congelar visualización y reloj ambiental en reposo).
+  - [x] Detección inmediata de salto de canción y recarga reactiva de letra.
+  - [x] Auto-cierre de la sesión de Cast tras inactividad prolongada (180 segundos configurable).
+  - [x] Gestor de configuración persistente `ConfigManager` (`src/config_manager.py`) leyendo/escribiendo en `config.json`.
+  - [x] Endpoints REST globales de configuración `GET /api/config` y `POST /api/config`.
+  - [x] Optimización de latencia en reconexiones Cast mediante caché de IP en memoria (`_device_cache`), evitando los 5 segundos de barrido mDNS.
+  - [x] Emisión periódica de PINGs Keep-Alive por el Custom Channel para mantener el socket TLS del Chromecast vivo durante pausas.
+  - [x] Scripts de ejecución y daemon para Windows en `scripts/` (`start_daemon.bat`, `start_hidden.vbs`, `stop_daemon.bat`, `install_startup.bat`, `uninstall_startup.bat`).
+  - [x] Suite de pruebas automatizadas para configuración y ciclo de vida en `tests/test_config_manager.py` y `tests/test_lifecycle.py`.
 - **Criterios de Aceptación**:
   - Experiencia 100% manos libres: el usuario solo interactúa con la voz en Alexa.
-- **Pruebas**:
-  - Ciclo de prueba: Reproducir -> Pausar -> Esperar timeout -> Verificar que la TV se apaga/vuelve al backdrop.
+  - La TV se activa automáticamente al iniciar la música y vuelve al backdrop tras 3 minutos de silencio.
+  - Las configuraciones (dispositivo Cast objetivo, timeout, proveedor por defecto) persisten en `config.json`.
+  - El sistema puede arrancar en segundo plano al iniciar Windows sin ventanas de consola visibles.
+  - 100% de la suite de pruebas (56 tests) pasando exitosamente.
+- **Pruebas Realizadas**:
+  - `tests/test_config_manager.py`: 4 tests validando valores por defecto, guardado/recarga en disco, actualizaciones en caliente y endpoints REST `GET/POST /api/config`.
+  - `tests/test_lifecycle.py`: 3 tests validando persistencia cruzada de configuración, emisión de keep-alives periódicos y flujo integral de ciclo de vida (Play -> AutoLaunch -> Pause -> Idle Timeout -> AutoQuit).
 - **Evidencia**:
-  - Logs de transición de estados de ciclo de vida.
-- **Riesgos**:
-  - Retardo en el lanzamiento de la app en Chromecast; optimizado pre-cargando la letra en paralelo al lanzamiento.
+  - `pytest -v`: **56 passed in 3.53s** en `tests/`.
+  - Scripts en `scripts/` creados y probados.
+  - `web/dist` re-compilado en producción en 2.11s.
+- **Riesgos Mitigados**:
+  - Caídas de socket en Chromecast mitigadas con Keep-Alive periódico cada 15 segundos.
+  - Latencia de búsqueda de TV reducida a < 100 ms tras el primer descubrimiento gracias a la caché de IP.
 
 ---
 

@@ -28,6 +28,7 @@ from src.sync_engine import SyncEngine
 from src.sync_models import SyncedPlaybackState
 from src.cast_controller import CastManager, DEFAULT_CAST_APP_ID
 from src.playback_orchestrator import PlaybackOrchestrator
+from src.config_manager import ConfigManager
 
 
 # --- Modelos de Entrada para la API Mock, Cast, Proveedores y AutoCast ---
@@ -76,6 +77,19 @@ class AutoCastConfigRequest(BaseModel):
     idle_timeout_seconds: Optional[float] = None
 
 
+class AppConfigRequest(BaseModel):
+    default_provider: Optional[str] = None
+    autocast_enabled: Optional[bool] = None
+    target_cast_device: Optional[str] = None
+    target_cast_host: Optional[str] = None
+    target_cast_app_id: Optional[str] = None
+    idle_timeout_seconds: Optional[float] = None
+    keep_alive_interval_seconds: Optional[float] = None
+    hass_url: Optional[str] = None
+    hass_token: Optional[str] = None
+    hass_alexa_entity: Optional[str] = None
+
+
 
 # --- Gestor de Conexiones WebSocket y Cast ---
 class ConnectionManager:
@@ -107,10 +121,15 @@ class ConnectionManager:
 
 # --- Estado Global de la Aplicación ---
 manager = ConnectionManager()
+config_manager = ConfigManager()
 lyrics_provider = LRCLIBLyricsProvider()
 engine = SyncEngine(lyrics_provider=lyrics_provider)
 cast_manager = CastManager()
-orchestrator = PlaybackOrchestrator(engine=engine, cast_manager=cast_manager, initial_provider="mock")
+orchestrator = PlaybackOrchestrator(
+    engine=engine,
+    cast_manager=cast_manager,
+    config_manager=config_manager,
+)
 mock_provider = orchestrator.mock_provider
 
 # Inicializar con Queen - Bohemian Rhapsody
@@ -396,6 +415,37 @@ async def configure_autocast(req: AutoCastConfigRequest):
         idle_timeout_seconds=req.idle_timeout_seconds,
     )
     return {"message": "Configuración de AutoCast actualizada", "autocast": cfg}
+
+
+@app.get("/api/config")
+async def get_config():
+    return config_manager.to_dict()
+
+
+@app.post("/api/config")
+async def update_config(req: AppConfigRequest):
+    updates = {k: v for k, v in req.model_dump().items() if v is not None}
+    config_manager.update(updates)
+    config_manager.save()
+    # Aplicar cambios al orquestador en caliente
+    if req.default_provider:
+        orchestrator.set_active_provider(req.default_provider)
+    orchestrator.configure_autocast(
+        enabled=req.autocast_enabled,
+        target_device=req.target_cast_device,
+        target_host=req.target_cast_host,
+        target_app_id=req.target_cast_app_id,
+        idle_timeout_seconds=req.idle_timeout_seconds,
+    )
+    if req.keep_alive_interval_seconds is not None:
+        orchestrator.keep_alive_interval_seconds = req.keep_alive_interval_seconds
+    if req.hass_url:
+        orchestrator.hass_provider.base_url = req.hass_url.rstrip("/")
+    if req.hass_token:
+        orchestrator.hass_provider.access_token = req.hass_token
+    if req.hass_alexa_entity:
+        orchestrator.hass_provider.entity_id = req.hass_alexa_entity
+    return {"message": "Configuración global actualizada", "config": config_manager.to_dict()}
 
 
 

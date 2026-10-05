@@ -17,6 +17,7 @@ from .hass_provider import HomeAssistantPlaybackProvider
 from .spotify_provider import SpotifyPlaybackProvider
 from .sync_engine import SyncEngine
 from .cast_controller import CastManager, DEFAULT_CAST_APP_ID
+from .config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +32,11 @@ class PlaybackOrchestrator:
         engine: SyncEngine,
         cast_manager: CastManager,
         initial_provider: str = "mock",
+        config_manager: Optional[ConfigManager] = None,
     ):
         self.engine = engine
         self.cast_manager = cast_manager
+        self.config_manager = config_manager
 
         # Instanciar proveedores disponibles
         self.mock_provider = MockPlaybackProvider()
@@ -48,17 +51,40 @@ class PlaybackOrchestrator:
             "spotify": self.spotify_provider,
         }
 
-        self.active_provider_name = initial_provider
+        # Cargar parámetros desde ConfigManager o valores predeterminados
+        if self.config_manager:
+            self.active_provider_name = self.config_manager.get("default_provider", initial_provider)
+            self.auto_cast_enabled: bool = bool(self.config_manager.get("autocast_enabled", False))
+            self.target_cast_device: Optional[str] = self.config_manager.get("target_cast_device", None)
+            self.target_cast_host: Optional[str] = self.config_manager.get("target_cast_host", None)
+            self.target_cast_app_id: str = self.config_manager.get("target_cast_app_id", DEFAULT_CAST_APP_ID)
+            self.idle_timeout_seconds: float = float(self.config_manager.get("idle_timeout_seconds", 180.0))
+            self.keep_alive_interval_seconds: float = float(
+                self.config_manager.get("keep_alive_interval_seconds", 15.0)
+            )
 
-        # Parámetros del Ciclo de Vida Automático de Cast
-        self.auto_cast_enabled: bool = False
-        self.target_cast_device: Optional[str] = None
-        self.target_cast_host: Optional[str] = None
-        self.target_cast_app_id: str = DEFAULT_CAST_APP_ID
-        self.idle_timeout_seconds: float = 180.0  # 3 minutos de pausa/inactividad
+            # Configuración opcional de Home Assistant desde config persistente
+            h_url = self.config_manager.get("hass_url")
+            h_token = self.config_manager.get("hass_token")
+            h_entity = self.config_manager.get("hass_alexa_entity")
+            if h_url:
+                self.hass_provider.base_url = h_url.rstrip("/")
+            if h_token:
+                self.hass_provider.access_token = h_token
+            if h_entity:
+                self.hass_provider.entity_id = h_entity
+        else:
+            self.active_provider_name = initial_provider
+            self.auto_cast_enabled = False
+            self.target_cast_device = None
+            self.target_cast_host = None
+            self.target_cast_app_id = DEFAULT_CAST_APP_ID
+            self.idle_timeout_seconds = 180.0
+            self.keep_alive_interval_seconds = 15.0
 
         # Seguimiento temporal del ciclo de vida
         self._last_playing_time: float = time.time()
+        self._last_keep_alive_time: float = 0.0
         self._was_playing: bool = False
 
     @property
@@ -69,6 +95,9 @@ class PlaybackOrchestrator:
         """Cambia el proveedor de reproducción activo."""
         if name in self.providers:
             self.active_provider_name = name
+            if self.config_manager:
+                self.config_manager.set("default_provider", name)
+                self.config_manager.save()
             logger.info(f"[Orchestrator] Proveedor activo cambiado a: {name}")
             return True
         return False
@@ -104,14 +133,27 @@ class PlaybackOrchestrator:
         """Configura el comportamiento automático de Google Cast."""
         if enabled is not None:
             self.auto_cast_enabled = enabled
+            if self.config_manager:
+                self.config_manager.set("autocast_enabled", enabled)
         if target_device is not None:
             self.target_cast_device = target_device
+            if self.config_manager:
+                self.config_manager.set("target_cast_device", target_device)
         if target_host is not None:
             self.target_cast_host = target_host
+            if self.config_manager:
+                self.config_manager.set("target_cast_host", target_host)
         if target_app_id is not None:
             self.target_cast_app_id = target_app_id
+            if self.config_manager:
+                self.config_manager.set("target_cast_app_id", target_app_id)
         if idle_timeout_seconds is not None:
             self.idle_timeout_seconds = idle_timeout_seconds
+            if self.config_manager:
+                self.config_manager.set("idle_timeout_seconds", idle_timeout_seconds)
+
+        if self.config_manager:
+            self.config_manager.save()
 
         logger.info(
             f"[Orchestrator] AutoCast configurado: enabled={self.auto_cast_enabled}, "
@@ -136,6 +178,12 @@ class PlaybackOrchestrator:
 
         now = time.time()
         is_playing = synced_state.is_playing if synced_state else False
+
+        # --- Enviar PING Keep-Alive a Chromecast si está conectado ---
+        if self.cast_manager.is_connected:
+            if (now - self._last_keep_alive_time) >= self.keep_alive_interval_seconds:
+                self.cast_manager.send_keep_alive()
+                self._last_keep_alive_time = now
 
         # --- Gestión Automática del Ciclo de Vida de Chromecast ---
         if is_playing:

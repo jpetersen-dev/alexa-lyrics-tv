@@ -1,0 +1,12 @@
+{
+  "default_provider": "mock",
+  "autocast_enabled": false,
+  "target_cast_device": null,
+  "target_cast_host": null,
+  "target_cast_app_id": "CC1AD845",
+  "idle_timeout_seconds": 180.0,
+  "keep_alive_interval_seconds": 15.0,
+  "hass_url": "http://homeassistant.local:8123",
+  "hass_token": "",
+  "hass_alexa_entity": "media_player.echo_dot"
+}
