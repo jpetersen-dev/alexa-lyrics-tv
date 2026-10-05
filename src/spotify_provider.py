@@ -42,7 +42,7 @@ class SpotifyPlaybackProvider(PlaybackProvider):
         self.client_id = client_id or os.getenv("SPOTIFY_CLIENT_ID", "")
         self.client_secret = client_secret or os.getenv("SPOTIFY_CLIENT_SECRET", "")
         self.redirect_uri = redirect_uri or os.getenv(
-            "SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback"
+            "SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8000/api/spotify/callback"
         )
         self.tokens_file = tokens_file or os.getenv(
             "SPOTIFY_TOKENS_FILE",

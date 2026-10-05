@@ -66,3 +66,20 @@ def test_api_cast_endpoints(client):
     resp_disc = client.post("/api/cast/disconnect")
     assert resp_disc.status_code == 200
 
+
+def test_api_spotify_endpoints(client):
+    # 1. Status inicial
+    resp = client.get("/api/spotify/status")
+    assert resp.status_code == 200
+    assert "authenticated" in resp.json()
+
+    # 2. Desconexión limpia
+    resp_disc = client.post("/api/spotify/disconnect")
+    assert resp_disc.status_code == 200
+
+    # 3. Login sin credenciales configuradas debe arrojar 400 amigable
+    resp_login = client.get("/api/spotify/login")
+    assert resp_login.status_code == 400
+    assert "Faltan credenciales" in resp_login.json()["detail"]
+
+

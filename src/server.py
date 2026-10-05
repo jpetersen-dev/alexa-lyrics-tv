@@ -18,6 +18,7 @@ if sys.platform == "win32":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -398,6 +399,60 @@ async def update_playback_webhook(req: WebhookPlaybackRequest):
         if cast_manager.is_connected:
             cast_manager.send_playback_state(state.to_dict())
     return {"message": "Estado de reproducción actualizado", "state": state.to_dict() if state else None}
+
+
+# --- Endpoints de Autenticación y Control de Spotify Connect ---
+@app.get("/api/spotify/login")
+async def spotify_login():
+    """Genera la URL de autorización oficial de Spotify y redirige al usuario."""
+    spotify_p = orchestrator.spotify_provider
+    if not spotify_p.client_id or not spotify_p.client_secret:
+        raise HTTPException(
+            status_code=400,
+            detail="Faltan credenciales de Spotify. Configura SPOTIFY_CLIENT_ID y SPOTIFY_CLIENT_SECRET en tu archivo .env",
+        )
+    auth_url = spotify_p.get_authorization_url()
+    return RedirectResponse(url=auth_url)
+
+
+@app.get("/api/spotify/callback")
+async def spotify_callback(code: Optional[str] = None, error: Optional[str] = None):
+    """Callback de OAuth 2.0 donde Spotify retorna el código de autorización."""
+    if error or not code:
+        raise HTTPException(status_code=400, detail=f"Error en autorización de Spotify: {error or 'Código no recibido'}")
+
+    spotify_p = orchestrator.spotify_provider
+    try:
+        spotify_p.exchange_code_for_tokens(code)
+        orchestrator.set_active_provider("spotify")
+        return RedirectResponse(url="/?spotify=connected")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error intercambiando código de Spotify: {e}")
+
+
+@app.get("/api/spotify/status")
+async def spotify_status():
+    spotify_p = orchestrator.spotify_provider
+    return {
+        "configured": bool(spotify_p.client_id and spotify_p.client_secret),
+        "authenticated": spotify_p.is_authenticated(),
+        "client_id": (spotify_p.client_id[:6] + "...") if spotify_p.client_id else None,
+        "is_active_provider": orchestrator.active_provider_name == "spotify",
+    }
+
+
+@app.post("/api/spotify/disconnect")
+async def spotify_disconnect():
+    spotify_p = orchestrator.spotify_provider
+    spotify_p.tokens = {}
+    if os.path.exists(spotify_p.tokens_file):
+        try:
+            os.remove(spotify_p.tokens_file)
+        except Exception:
+            pass
+    if orchestrator.active_provider_name == "spotify":
+        orchestrator.set_active_provider("mock")
+    return {"message": "Sesión de Spotify desconectada"}
 
 
 @app.get("/api/autocast/config")

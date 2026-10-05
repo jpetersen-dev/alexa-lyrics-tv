@@ -236,6 +236,37 @@ export const DiagnosticPanel: React.FC<DiagnosticPanelProps> = ({
                 📡 Simular Push de Alexa Echo
               </button>
             )}
+            {activeProvider === 'spotify' && (
+              <div style={{ marginTop: '6px', display: 'flex', gap: '6px' }}>
+                <a
+                  href="/api/spotify/login"
+                  target="_self"
+                  style={{
+                    flex: 1,
+                    textAlign: 'center',
+                    background: '#1db954',
+                    color: '#fff',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    textDecoration: 'none',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  🟢 Vincular Cuenta de Spotify
+                </a>
+                <button
+                  className="btn-small"
+                  onClick={async () => {
+                    await fetch('/api/spotify/disconnect', { method: 'POST' });
+                    window.location.reload();
+                  }}
+                  style={{ fontSize: '11px', background: '#374151', color: '#f87171' }}
+                >
+                  Desvincular
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Sección de Gestión de Google Cast */}
