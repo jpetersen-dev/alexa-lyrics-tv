@@ -191,4 +191,34 @@ Para garantizar que Alexa Lyrics TV funcione de manera autónoma sin requerir re
    - `stop_daemon.bat`: Terminación limpia de cualquier proceso escuchando en el puerto 8000 mediante `netstat` y `taskkill`.
    - `install_startup.bat` / `uninstall_startup.bat`: Registro y desregistro del acceso directo silencioso en la carpeta de inicio de Windows (`shell:startup`).
 
+---
+
+## ADR 012: Tolerancia a Fallos, Resiliencia ante Caídas de Red y Degradación Elegante de UI
+
+### Contexto
+Un sistema doméstico manos libres que corre de fondo debe sobrevivir a eventos hostiles sin bloquear hilos ni requerir reinicios manuales:
+1. Cortes de Internet mientras suena música.
+2. Pistas instrumentales, sin catalogar en LRCLIB o con errores de servidor (HTTP 429/500/Timeout).
+3. Apagado accidental o desconexión del Chromecast HDMI a mitad de una reproducción.
+4. Caídas o timeouts en la API de Home Assistant.
+5. Fluctuaciones rápidas (jitter) de play/pause emitidas por dispositivos Echo.
+
+### Decisión
+1. **Fallback a Caché Local SQLite (`LRCLIBLyricsProvider`)**:
+   - Si la red cae, el motor consulta primero la base local `lyrics_cache.db`. Si la pista fue reproducida previamente, se entrega inmediatamente en modo `is_cached = True`.
+   - Si la pista no está en caché y ocurre un error de red, se emite `LyricsStatus.ERROR` de forma no bloqueante, permitiendo que el reloj de reproducción continúe funcionando con degradación elegante.
+2. **Degradación Visual en el Visor TV (`KaraokeView.tsx`)**:
+   - Se crearon vistas específicas para cada estado anormal:
+     - `NO_LYRICS`: Icono de nota musical, título "Pista Instrumental" y carátula limpia.
+     - `UNSYNCED`: Modo de lectura en texto plano con desplazamiento suave.
+     - `ERROR`: Icono de antena, título "Sin Conexión a Letras" y modo ambiental.
+     - `IDLE`: Modo reloj analógico/digital para descanso de panel OLED/LED.
+3. **Desconexión Defensiva ante Sockets Rotos (`CastManager`)**:
+   - `send_playback_state` y `send_keep_alive` capturan `BrokenPipeError`, `ConnectionResetError` y excepciones genéricas de socket, invocando de inmediato `disconnect()` e invalidando `is_connected` para prevenir llamadas sobre sockets muertos.
+4. **Reconexión Automática con Throttle (`PlaybackOrchestrator`)**:
+   - Si el televisor estaba apagado al iniciar la música, el orquestador no entra en bucle de reintento mDNS; aplica una ventana de throttle de 10 segundos para reintentar la conexión de forma limpia. Si el televisor se enciende más tarde, la sesión de karaoke se acopla automáticamente.
+5. **Aislamiento de Excepciones en Proveedores Externos**:
+   - `HomeAssistantPlaybackProvider` y `WebhookPlaybackProvider` aíslan cualquier excepción HTTP/JSON devolviendo `None`, manteniendo la estabilidad inquebrantable del bucle de eventos.
+
+
 

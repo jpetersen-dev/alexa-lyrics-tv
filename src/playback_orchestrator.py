@@ -85,6 +85,7 @@ class PlaybackOrchestrator:
         # Seguimiento temporal del ciclo de vida
         self._last_playing_time: float = time.time()
         self._last_keep_alive_time: float = 0.0
+        self._last_connect_attempt_time: float = 0.0
         self._was_playing: bool = False
 
     @property
@@ -189,18 +190,27 @@ class PlaybackOrchestrator:
         if is_playing:
             self._last_playing_time = now
 
-            # 1. Detección de inicio de reproducción -> Auto-lanzar en TV
-            if not self._was_playing and self.auto_cast_enabled:
-                if not self.cast_manager.is_connected:
-                    logger.info("[Orchestrator] Inicio de reproducción detectado. Conectando a Chromecast...")
-                    connected = self.cast_manager.connect_to_device(
-                        name=self.target_cast_device,
-                        host=self.target_cast_host,
-                    )
-                    if connected:
-                        logger.info(f"[Orchestrator] Lanzando app {self.target_cast_app_id} en TV...")
-                        self.cast_manager.launch_app(self.target_cast_app_id)
-                        self.cast_manager.send_playback_state(synced_state.to_dict())
+            # Si recién comenzó la reproducción, permitir intento de conexión inmediato
+            if not self._was_playing:
+                self._last_connect_attempt_time = 0.0
+
+            # 1. Detección de reproducción y reconexión automática si está desconectado
+            if self.auto_cast_enabled and not self.cast_manager.is_connected:
+                # Reintento con throttle de 10 segundos para no saturar la red si el TV está apagado
+                if (now - self._last_connect_attempt_time) >= 10.0:
+                    self._last_connect_attempt_time = now
+                    logger.info("[Orchestrator] Reproducción activa detectada. Conectando a Chromecast...")
+                    try:
+                        connected = self.cast_manager.connect_to_device(
+                            name=self.target_cast_device,
+                            host=self.target_cast_host,
+                        )
+                        if connected:
+                            logger.info(f"[Orchestrator] Lanzando app {self.target_cast_app_id} en TV...")
+                            self.cast_manager.launch_app(self.target_cast_app_id)
+                            self.cast_manager.send_playback_state(synced_state.to_dict())
+                    except Exception as e:
+                        logger.warning(f"[Orchestrator] No se pudo conectar a Chromecast: {e}")
 
             self._was_playing = True
 

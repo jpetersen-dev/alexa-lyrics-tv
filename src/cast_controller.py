@@ -190,8 +190,9 @@ class CastManager:
         try:
             self.cast_controller.send_message(json.dumps({"type": "PING", "time": time.time()}))
             return True
-        except Exception:
-            self._is_connected = False
+        except Exception as e:
+            logger.warning(f"Error enviando keep-alive al Chromecast (posible desconexión): {e}")
+            self.disconnect()
             return False
 
     def launch_app(self, app_id: str = DEFAULT_CAST_APP_ID, timeout: float = 10.0) -> bool:
@@ -218,6 +219,7 @@ class CastManager:
             return self.cast_device.app_id == app_id
         except Exception as e:
             logger.error(f"Error lanzando aplicación Cast: {e}")
+            self.disconnect()
             return False
 
     def send_playback_state(self, state_dict: Dict[str, Any]) -> bool:
@@ -229,7 +231,8 @@ class CastManager:
             self.cast_controller.send_synced_state(state_dict)
             return True
         except Exception as e:
-            logger.error(f"Error transmitiendo estado al Cast: {e}")
+            logger.warning(f"Error transmitiendo estado al Cast (cerrando conexión): {e}")
+            self.disconnect()
             return False
 
     def quit_app(self) -> None:

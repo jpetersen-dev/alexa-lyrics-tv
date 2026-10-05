@@ -1,9 +1,9 @@
 {
   "project_name": "ALEXA LYRICS TV",
-  "version": "0.6.0",
-  "last_updated": "2026-10-05T03:00:00-03:00",
-  "current_phase": "FASE 5 — AUTOMATIZACIÓN COMPLETA Y CICLO DE VIDA",
-  "status": "LIFECYCLE_AUTOMATED",
+  "version": "0.7.0",
+  "last_updated": "2026-10-05T03:25:00-03:00",
+  "current_phase": "FASE 6 — ROBUSTEZ Y RECUPERACIÓN ANTE FALLOS",
+  "status": "CHAOS_RESILIENT",
   "workspace_path": "d:\\Projects (Local)\\alexa-lyrics-tv",
   "scratch_junction": "C:\\Users\\peter\\.gemini\\antigravity\\scratch\\alexa-lyrics-tv",
   "environment": {
@@ -33,7 +33,7 @@
       "status": "VALIDATED",
       "module": "src.playback_orchestrator.PlaybackOrchestrator",
       "providers_supported": ["mock", "webhook", "homeassistant", "spotify"],
-      "autocast": "Auto-lanzamiento en TV al reproducir, auto-cierre tras inactividad y keep-alive cada 15s",
+      "autocast": "Auto-lanzamiento en TV al reproducir, auto-cierre tras inactividad y reconexión con throttle (10s)",
       "tests_passed": "10/10 (tests/test_hass_provider.py + tests/test_playback_orchestrator.py + tests/test_lifecycle.py)"
     },
     "configuration_manager": {
@@ -56,7 +56,7 @@
       "status": "VALIDATED",
       "framework": "React 19 + TypeScript + Vite (Universal Web / Cast Receiver)",
       "client_clock": "useSyncedLyrics (requestAnimationFrame 60 fps + performance.now() local interpolation)",
-      "tv_ui": "KaraokeView (Tipografía 48px+ con glow, auto-scroll vertical suave centrado, ambient clock en pausa)",
+      "tv_ui": "KaraokeView (Tipografía 48px+ con glow, auto-scroll vertical suave centrado, ambient clock en pausa y fallbacks NO_LYRICS/ERROR)",
       "diagnostic_tool": "DiagnosticPanel (Controles mock + buscador LRCLIB + gestión Cast + selector de fuente Alexa)",
       "build_status": "npm run build exitoso (dist/ generado con soporte CAF v3 y vercel.json)"
     },
@@ -67,7 +67,21 @@
       "hosting_target": "Vercel (Free tier, HTTPS SSL obligatorio, vercel.json configurado)",
       "custom_message_namespace": "urn:x-cast:com.alexalyricstv.sync",
       "input_payload": "SyncedPlaybackState",
-      "backend_controller": "src.cast_controller.CastManager (con caché de IP y Keep-Alive PING)"
+      "backend_controller": "src.cast_controller.CastManager (con caché de IP, Keep-Alive PING y desconexión defensiva ante BrokenPipe)"
+    },
+    "chaos_and_resilience": {
+      "status": "VALIDATED",
+      "test_suite": "tests/test_chaos_resilience.py",
+      "coverage": [
+        "Cortes de red con fallback a caché SQLite",
+        "Manejo limpio de errores LRCLIB HTTP 429/500/timeout",
+        "Pistas instrumentales y sin letra catalogada",
+        "Apagado o desconexión abrupta de Chromecast",
+        "Caídas o timeouts de Home Assistant",
+        "Fluctuaciones rápidas (jitter) de transporte",
+        "Reconexión instantánea tras reinicio del daemon"
+      ],
+      "tests_passed": "11/11"
     },
     "windows_background_daemon": {
       "status": "IMPLEMENTED",
@@ -91,12 +105,11 @@
       "connectivity_test": "PASSED (Queen - Bohemian Rhapsody probado en vivo y verificado en caché)"
     }
   },
-  "total_automated_tests": "56 passing in pytest (100% success)",
+  "total_automated_tests": "67 passing in pytest (100% success)",
   "blockers": [
     "SPOTIFY_POLICY_COMPATIBILITY se mantiene como UNRESOLVED para preservar la independencia jurídica."
   ],
   "next_actions": [
-    "Fase 6: Pruebas de robustez y resiliencia ante cortes de red, canciones sin letra y caídas de dispositivos.",
-    "Fase 7: Despliegue en producción del Cast Receiver en Vercel."
+    "Fase 7: Despliegue en producción del Cast Receiver en Vercel y manual operativo final."
   ]
 }

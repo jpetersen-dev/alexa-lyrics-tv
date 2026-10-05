@@ -139,6 +139,16 @@ export const KaraokeView: React.FC<KaraokeViewProps> = ({
           </div>
         )}
 
+        {state.lyrics_status === 'ERROR' && (
+          <div className="status-message-container">
+            <div className="instrumental-icon">📡</div>
+            <h3 className="status-title">Sin Conexión a Letras</h3>
+            <p className="status-text">
+              No se pudo conectar con el catálogo de letras. Disfrutando de la música en modo ambiental.
+            </p>
+          </div>
+        )}
+
         {state.lyrics_status === 'UNSYNCED' && (
           <div className="unsynced-lyrics-container">
             <p className="unsynced-badge">Letra no sincronizada</p>

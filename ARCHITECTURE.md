@@ -241,6 +241,20 @@ La documentación oficial de Spotify Web API contiene la siguiente prohibición 
   - `install_startup.bat`: Creación automática del acceso directo silencioso en la carpeta de inicio de Windows (`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`).
   - `uninstall_startup.bat`: Eliminación limpia del acceso directo de arranque.
 
+### 4.8. Robustez, Resiliencia ante Fallos y Estrategia Offline
+- **Tolerancia a Cortes de Red (Estrategia de Caché)**:
+  - `LRCLIBLyricsProvider` consulta primero `lyrics_cache.db` (SQLite). Si Internet cae, las canciones previamente reproducidas se siguen sincronizando localmente sin interrupciones (`is_cached: true`).
+  - Si la canción no estaba en caché y la red falla (timeout, conexión rechazada, HTTP 429/500), el proveedor emite `LyricsStatus.ERROR` sin propagar excepciones que interrumpan el bucle de sincronización ni el reloj.
+- **Degradación Elegante en Pantalla (`web/src/components/KaraokeView.tsx`)**:
+  - `NO_LYRICS`: Canciones instrumentales o fuera de catálogo muestran interfaz limpia con nota musical y carátula.
+  - `UNSYNCED`: Canciones con solo letra plana se despliegan en modo lectura vertical.
+  - `ERROR`: Modo ambiental de música con aviso informativo ("Sin conexión al catálogo de letras").
+  - `IDLE`: Reloj ambiental minimalista en reposo.
+- **Desconexión Defensiva de Cast**:
+  - `CastManager` captura fallos de socket (`BrokenPipeError`, `ConnectionResetError`) tanto en `send_playback_state` como en `send_keep_alive`, forzando `disconnect()` inmediato para evitar estados fantasma.
+- **Reconexión Automática con Throttle**:
+  - `PlaybackOrchestrator` implementa un límite de reintento de 10 segundos para buscar y reconectar el Chromecast mientras haya música activa, evitando saturar la CPU o la red mDNS si el televisor está apagado. Al encenderse, la conexión se establece automáticamente.
+
 ---
 
 ## 5. Decisiones Técnicas Fundamentales
@@ -250,5 +264,6 @@ La documentación oficial de Spotify Web API contiene la siguiente prohibición 
    - `FastAPI` para APIs de desarrollo, WebSockets de baja latencia y servicio de la SPA.
 2. **Frontend Receiver / Visor**: React 19 + TypeScript + Vite, optimizado para televisores 1080p/4K, convertible a Cast Custom Web Receiver (CAF v3) y desplegable en Vercel con HTTPS.
 3. **Manejo de Secretos**: Ningún token o secreto se transmite jamás al Chromecast ni se expone en el código cliente.
+
 
 

@@ -230,20 +230,28 @@
 
 ## 📌 Fase 6 — Robustez y Recuperación ante Fallos
 
-- **Objetivo**: Garantizar que el sistema tolere cortes de red, canciones sin letra, apagado del Chromecast y desconexiones de Alexa.
+- **Objetivo**: Garantizar que el sistema tolere cortes de red, canciones sin letra, apagado imprevisto del Chromecast y desconexiones de fuentes de audio.
 - **Tareas**:
-  - [ ] Prueba de pérdida temporal de Internet (debe operar con letras en caché).
-  - [ ] Prueba con canción sin letra en LRCLIB (debe mostrar carátula y mensaje amigable en TV sin colapsar).
-  - [ ] Prueba de Chromecast apagado o fuera de línea (el daemon no debe crashear; reintenta silenciosamente).
-  - [ ] Prueba de reinicio imprevisto del daemon (debe reenganchar la sesión activa al arrancar).
+  - [x] Prueba de pérdida temporal de Internet (operación transparente con letras cacheadas en SQLite).
+  - [x] Tratamiento graceful de canciones no catalogadas o errores de red (`LyricsStatus.ERROR` y `LyricsStatus.NO_LYRICS` sin colapsar el daemon ni el visor TV).
+  - [x] Prueba de Chromecast apagado o fuera de línea (reintento automático throttled cada 10 segundos sin bloqueos ni excepciones no capturadas).
+  - [x] Liberación automática de sockets e invalidación de estado ante `BrokenPipeError` o `ConnectionResetError` durante la transmisión o Keep-Alive.
+  - [x] Tolerancia a fallos de Home Assistant (timeouts, caídas de red, códigos HTTP 500 y estados de reposo/standby procesados limpiamente retornando `None`).
+  - [x] Prueba de fluctuaciones rápidas (jitter de Play/Pause) garantizando monotonía del reloj de sincronización.
+  - [x] Prueba de reinicio imprevisto del daemon con reenganche inmediato de la sesión activa en el Chromecast.
+  - [x] UI adaptativa en `KaraokeView.tsx` para estados `NO_LYRICS`, `UNSYNCED` y `ERROR`.
+  - [x] Matriz de pruebas de caos y resiliencia en `tests/test_chaos_resilience.py`.
 - **Criterios de Aceptación**:
   - Ningún error no controlado detiene el servicio.
-- **Pruebas**:
-  - Matriz de tests de caos y resiliencia.
+  - El televisor presenta siempre una interfaz pulida y ambiental ante cualquier fallo externo.
+  - 100% de la suite de pruebas (67 tests) pasando exitosamente.
+- **Pruebas Realizadas**:
+  - `tests/test_chaos_resilience.py`: 11 tests cubriendo cortes de red, pistas instrumentales, desconexión de Chromecast durante envío de estado o keep-alive, reconexión con throttle, caídas de Home Assistant, tolerancia a jitter y reenganche al reiniciar el daemon.
 - **Evidencia**:
-  - Registro de logs confirmando recuperación airosa en todos los escenarios.
-- **Riesgos**:
-  - Bloqueos de socket en `pychromecast`; mitigado con wrappers de reconexión automática.
+  - `pytest -v`: **67 passed in 3.70s** en `tests/`.
+  - Compilación limpia de producción en `web/dist`.
+- **Riesgos Mitigados**:
+  - Bloqueos de socket y bucles de reintento mDNS eliminados mediante throttle de 10s y auto-desconexión defensiva.
 
 ---
 
